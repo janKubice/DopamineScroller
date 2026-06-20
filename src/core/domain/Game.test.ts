@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Game, REACTION_WINDOW } from './Game';
+import { BigNumber } from '../math/BigNumber';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -114,5 +115,55 @@ describe('Game — komentářová ruleta', () => {
     // všechny "naskákané" liky se připsaly do LIK
     const r = resolved as unknown as { result: { likes: number } };
     expect(game.wallet.get('LIK').toNumber()).toBe(r.result.likes);
+  });
+});
+
+describe('Game — upgrady', () => {
+  it('koupě telefonu přidá telefon a utratí Dopamin', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1000));
+    expect(game.buy('secondhand_phone', 1)).toBe(1);
+    expect(game.phones).toHaveLength(2);
+    expect(game.wallet.get('DOP').toNumber()).toBeCloseTo(900, 5); // 1000 - 100
+  });
+
+  it('bez měny nelze koupit', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.buy('secondhand_phone', 1)).toBe(0);
+    expect(game.phones).toHaveLength(1);
+  });
+
+  it('algoritmy násobí produkci Dopaminu', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(100000));
+    expect(game.productionMultiplier.toNumber()).toBe(1);
+    game.buy('echo_chamber', 1); // ×1.5
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.5, 5);
+    game.buy('clickbait', 1); // ×1.1
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.65, 5);
+  });
+
+  it('maxLevel se respektuje', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(100000));
+    expect(game.buy('echo_chamber', 1)).toBe(1);
+    expect(game.buy('echo_chamber', 1)).toBe(0); // už na maximu
+  });
+
+  it('hromadný nákup koupí víc úrovní najednou', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(100000));
+    expect(game.buy('clickbait', 10)).toBe(10);
+    expect(game.upgrades.level('clickbait')).toBe(10);
+  });
+
+  it('emituje UpgradePurchased', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1000));
+    let event: { id: string; level: number } | null = null;
+    game.bus.on('UpgradePurchased', (e) => (event = e));
+    game.buy('secondhand_phone', 1);
+    expect(event).not.toBeNull();
+    expect((event as unknown as { id: string }).id).toBe('secondhand_phone');
   });
 });

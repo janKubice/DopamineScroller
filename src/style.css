@@ -237,17 +237,76 @@ body {
   }
 }
 
-/* ── Bottom upgrades bar (placeholder for Phase 2) ── */
+/* ── Bottom upgrades bar ── */
 .upgrades {
   border-top: 1px solid #e3e3e3;
   background: #fff;
   min-height: 64px;
+  padding: 10px 14px;
   display: flex;
-  align-items: center;
+  gap: 10px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
-.upgrades__hint {
+.upg {
+  font: inherit;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  align-items: center;
+  min-width: 180px;
+  padding: 8px 12px;
+  border: 1px solid #d4d4d4;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.05s;
+}
+
+.upg:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.upg:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.upg:disabled {
   opacity: 0.45;
+  cursor: default;
+}
+
+.upg.is-owned {
+  border-color: #b7d3ff;
+  background: #f4f8ff;
+}
+
+.upg__icon {
+  grid-row: 1 / 3;
+  font-size: 26px;
+}
+
+.upg__name {
+  font-weight: 700;
   font-size: 14px;
+}
+
+.upg__meta {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.upg__lvl {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.upg__cost {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
 }

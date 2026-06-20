@@ -7,8 +7,8 @@ kdy je doména hotová a otestovaná.
 | Fáze | Milník | Obsah | Stav |
 |---|---|---|---|
 | **F0 — Základy** | „Běží tick a testy" | Vite+TS+Vitest, **BigNumber**, seedovaný **RNG**, **EventBus**, **GameClock** (offline-ready), kostra GameState | ✅ |
-| **F1 — Core Loop** | „Scrolluju 1 telefon, Dopamin roste" | **Phone FSM**, měna Dopamin, **Wallet**, **CostCurve**, **Komentářová ruleta** (start), 1 platforma (Text-It), **Streak (M3)** základ, dev DOM harness | 🟡 |
-| **F2 — Ekonomika & Upgrady** | „Kupuju, čísla rostou exponenciálně" | Multi-měna (LCS), generický `Purchasable` + hromadný nákup, hardware upgrady, algoritmy (multiplikátory), formátování čísel | ⬜ |
+| **F1 — Core Loop** | „Scrolluju 1 telefon, Dopamin roste" | **Phone FSM**, měna Dopamin, **Wallet**, **CostCurve**, **Komentářová ruleta** (opožděné reakce), 1 platforma (Text-It), **Streak (M3)**, dev DOM harness | ✅ |
+| **F2 — Ekonomika & Upgrady** | „Kupuju, čísla rostou exponenciálně" | **UpgradeStore** (generický Purchasable) + **hromadný nákup**, hardware (další telefony), algoritmy (**dopamineMultiplier**), spodní lišta upgradů | ✅ |
 | **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, penalizační křivka, network upgrady, **QoS alokace (M5)** | ⬜ |
 | **F4 — Automatizace** | „Hra se hraje sama" | Boti (Auto-Liker/Commenter/Scroller) jako tick-aktoři, jejich Bandwidth náklad, **Pozornost (M1)**, streak bot-floor | ⬜ |
 | **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | Progrese platforem (+nové sítě C1), **Virality → Hidden Gems**, **Brain Rot** větev (C2), **Synergie (M2)**, content provider (~100 obrázků + text), rozšíření komentářů na ~100 | ⬜ |
@@ -34,5 +34,7 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
 - Zbylé minihry (M4) ve **F9** (rozhraní `IMiniGameResolver` připraveno dřív).
 
 ## Aktuální stav
-- ✅ **F0 hotová** — viz `src/core/{math,time,events}`.
-- 🟡 **F1 probíhá** — Phone FSM, Wallet, CostCurve, CommentPool, dev harness.
+- ✅ **F0 hotová** — `src/core/{math,time,events}`.
+- ✅ **F1 hotová** — Phone FSM, Wallet, CostCurve, CommentPool (opožděné reakce), Streak, dev harness.
+- ✅ **F2 hotová** — UpgradeStore + hromadný nákup, hardware, algoritmy (multiplikátory), spodní lišta.
+- ⬜ **F3 další** — Bandwidth bottleneck.

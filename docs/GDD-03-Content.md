@@ -67,6 +67,22 @@ Kupováno za Dopamin (DOP) a mikro-měny (LCS).
 - Kitten Video Boost — každý 10. post roztomilé zvíře, garantovaný ×2.
 - Outrage Algorithm — záměrně naštve = víc Comments (LCS).
 
+### 3.1 Implementovaný nákupní systém (Fáze 2)
+Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`): cena
+(měna, base, exponenciální multiplikátor), volitelný `maxLevel` a deklarativní `effect`
+(`addPhone` | `dopamineMultiplier`). Ceny a úrovně spravuje `UpgradeStore`, nákup
+(včetně **hromadného ×10**) a aplikaci efektů řeší `Game.buy`. Startovní sada:
+
+| id | Název | Měna · base · mult | Efekt |
+|---|---|---|---|
+| `secondhand_phone` | Secondhand Smartphone | DOP · 100 · 1.15 | +1 telefon (neomezeně) |
+| `clickbait` | Clickbait Optimizer | DOP · 50 · 1.2 | ×1.1 Dopamin / úroveň |
+| `echo_chamber` | Echo Chamber | DOP · 500 · — | ×1.5 Dopamin (max 1) |
+| `kitten_boost` | Kitten Video Boost | DOP · 2500 · — | ×2 Dopamin (max 1) |
+
+> Algoritmy se skládají **multiplikativně** do `Game.productionMultiplier`, který spolu se
+> Streakem tvoří globální multiplikátor swipe Dopaminu. Balanc konstanty → JSON ve Fázi 9.
+
 ## 4. Temná větev: Brain Rot
 
 Kupováno za Brain Rot. Způsobuje vizuální poškození UI (glitche, reklamy), ale obrovsky zvyšuje produkci.

@@ -30,9 +30,7 @@ app.innerHTML = `
 
   <div class="notifications" id="notifications"></div>
 
-  <footer class="upgrades" id="upgrades">
-    <span class="upgrades__hint">Upgrades — coming in Phase 2</span>
-  </footer>
+  <footer class="upgrades" id="upgrades"></footer>
 `;
 
 const hud = byId('hud');
@@ -40,6 +38,7 @@ const screen = byId('screen');
 const actions = byId('actions');
 const choices = byId('choices');
 const notifications = byId('notifications');
+const upgrades = byId('upgrades');
 
 const HUD_ORDER: CurrencyId[] = ['DOP', 'LIK', 'COM', 'BR'];
 
@@ -53,7 +52,44 @@ function renderHud(): void {
   const money = HUD_ORDER.map(
     (id) => `<span class="hud__item">${CURRENCIES[id].symbol} ${game.wallet.get(id).format()}</span>`,
   ).join('');
-  hud.innerHTML = money + `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
+  hud.innerHTML =
+    money +
+    `<span class="hud__item">📱 ${game.phones.length}</span>` +
+    `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
+}
+
+function buildUpgrades(): void {
+  upgrades.innerHTML = game
+    .upgradeView()
+    .map(
+      (u) => `
+      <button class="upg" data-id="${u.id}" title="${escapeHtml(u.description)} (Shift = ×10)">
+        <span class="upg__icon">${u.icon}</span>
+        <span class="upg__name">${escapeHtml(u.name)}</span>
+        <span class="upg__meta"><span class="upg__lvl"></span><span class="upg__cost"></span></span>
+      </button>`,
+    )
+    .join('');
+  for (const btn of Array.from(upgrades.querySelectorAll<HTMLButtonElement>('button.upg'))) {
+    btn.addEventListener('click', (ev) => {
+      const id = btn.dataset['id'];
+      if (id) game.buy(id, ev.shiftKey ? 10 : 1);
+    });
+  }
+  refreshUpgrades();
+}
+
+function refreshUpgrades(): void {
+  for (const u of game.upgradeView()) {
+    const btn = upgrades.querySelector<HTMLButtonElement>(`button[data-id="${u.id}"]`);
+    if (!btn) continue;
+    btn.querySelector('.upg__lvl')!.textContent = u.maxed ? 'MAX' : u.level > 0 ? `Lv ${u.level}` : '';
+    btn.querySelector('.upg__cost')!.textContent = u.maxed
+      ? ''
+      : `${CURRENCIES[u.costCurrency].symbol} ${u.cost.format()}`;
+    btn.disabled = u.maxed || !u.affordable;
+    btn.classList.toggle('is-owned', u.level > 0);
+  }
 }
 
 // Rebuild the phone screen + action buttons only when the phone's state changes,
@@ -144,6 +180,8 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
+buildUpgrades();
+
 // Game loop: presentation measures real time, GameClock steps the domain at a fixed rate.
 let last = performance.now();
 function frame(now: number): void {
@@ -151,6 +189,7 @@ function frame(now: number): void {
   last = now;
   renderHud();
   syncPhone();
+  refreshUpgrades();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

@@ -60,6 +60,8 @@ index.html             # vstupní bod HTML5
 ## Stav vývoje
 
 - ✅ **Fáze 0 — Základy:** struktura projektu, BigNumber, seedovaný RNG, event bus, tick systém.
-- 🟡 **Fáze 1 — Core Loop (probíhá):** stavový automat telefonu, měna Dopamin, peněženka,
-  cenová křivka, základ Komentářové rulety, dev harness.
-- ⬜ Fáze 2+ — viz roadmapa.
+- ✅ **Fáze 1 — Core Loop:** stavový automat telefonu, Dopamin, peněženka, cenová křivka,
+  Komentářová ruleta (opožděné reakce), Streak, dev harness.
+- ✅ **Fáze 2 — Ekonomika & Upgrady:** UpgradeStore + hromadný nákup, další telefony,
+  algoritmy (multiplikátory), spodní lišta upgradů.
+- ⬜ Fáze 3+ (Bandwidth bottleneck) — viz roadmapa.

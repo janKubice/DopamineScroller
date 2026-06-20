@@ -1,9 +1,11 @@
 import { EventBus, type EventMap } from '../events/EventBus';
 import { Wallet } from '../economy/Wallet';
+import { UpgradeStore } from '../economy/UpgradeStore';
 import type { CurrencyId } from '../economy/currencies';
 import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
+import { UPGRADES, type UpgradeDef } from '../content/upgrades';
 import {
   Phone,
   DEFAULT_PHONE_CONFIG,
@@ -33,6 +35,20 @@ export interface GameEvents extends EventMap {
   CommentResolved: { phoneId: number; result: CommentResult };
   CurrencyChanged: { id: CurrencyId; total: BigNumber };
   StreakChanged: { value: number };
+  UpgradePurchased: { id: string; level: number };
+}
+
+/** View model jednoho upgradu pro prezentaci. */
+export interface UpgradeView {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  level: number;
+  maxed: boolean;
+  cost: BigNumber;
+  costCurrency: CurrencyId;
+  affordable: boolean;
 }
 
 // ── Balanc konstanty (Fáze 9 je externalizuje do dat) ──
@@ -70,17 +86,19 @@ interface ActiveReaction {
 export interface GameOptions {
   seed?: number;
   comments?: CommentPool;
+  upgrades?: readonly UpgradeDef[];
   phoneConfig?: PhoneConfig;
 }
 
 /**
  * Game — kořenový herní stav a orchestrátor. Implementuje Tickable (krokuje ho GameClock).
- * Drží peněženku, RNG, telefony, streak a komentářový pool; emituje eventy přes EventBus.
- * Prezentace volá Commands (swipe/like/offerComments/postComment) a odebírá eventy.
+ * Drží peněženku, RNG, telefony, streak, upgrady a komentářový pool; emituje eventy přes
+ * EventBus. Prezentace volá Commands (swipe/like/postComment/buy) a odebírá eventy.
  */
 export class Game implements Tickable {
   readonly bus = new EventBus<GameEvents>();
   readonly wallet = new Wallet();
+  readonly upgrades: UpgradeStore;
   readonly rng: Rng;
   readonly clock: GameClock;
   readonly phones: Phone[] = [];
@@ -96,6 +114,7 @@ export class Game implements Tickable {
   constructor(options: GameOptions = {}) {
     this.rng = new Rng(options.seed ?? 1);
     this.comments = options.comments ?? CommentPool.default();
+    this.upgrades = new UpgradeStore(options.upgrades ?? UPGRADES);
     this.clock = new GameClock(this);
     this.addPhone(options.phoneConfig ?? DEFAULT_PHONE_CONFIG);
   }
@@ -112,6 +131,18 @@ export class Game implements Tickable {
 
   get dopamine(): BigNumber {
     return this.wallet.get('DOP');
+  }
+
+  /** Globální multiplikátor produkce z algoritmů (součin koupených dopamineMultiplier). */
+  get productionMultiplier(): BigNumber {
+    let mult = BigNumber.ONE;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === 'dopamineMultiplier') {
+        const lvl = this.upgrades.level(def.id);
+        if (lvl > 0) mult = mult.mul(BigNumber.of(def.effect.value).pow(lvl));
+      }
+    }
+    return mult;
   }
 
   // ── Commands (Prezentace → Doména) ──────────────────────────────────────────
@@ -179,6 +210,52 @@ export class Game implements Tickable {
     return true;
   }
 
+  /**
+   * Koupí až `requested` úrovní upgradu (hromadný nákup, např. ×10). Koupí maximum, na co
+   * stačí měna a co dovolí maxLevel. Vrací počet skutečně koupených úrovní.
+   */
+  buy(id: string, requested = 1): number {
+    const def = this.upgrades.def(id);
+    if (!def) return 0;
+    const want = Math.min(requested, this.upgrades.remaining(id));
+    if (want <= 0) return 0;
+
+    const budget = this.wallet.get(def.cost.currency);
+    const n = Math.min(want, this.upgrades.maxAffordable(id, budget));
+    if (n <= 0) return 0;
+
+    const cost = this.upgrades.bulkCost(id, n);
+    this.wallet.spend(def.cost.currency, cost);
+    this.upgrades.incrementLevel(id, n);
+    this.applyEffect(def, n);
+
+    this.bus.emit('CurrencyChanged', {
+      id: def.cost.currency,
+      total: this.wallet.get(def.cost.currency),
+    });
+    this.bus.emit('UpgradePurchased', { id, level: this.upgrades.level(id) });
+    return n;
+  }
+
+  /** View model upgradů pro prezentaci (spodní lišta). */
+  upgradeView(): UpgradeView[] {
+    return this.upgrades.all.map((def) => {
+      const maxed = this.upgrades.isMaxed(def.id);
+      const cost = this.upgrades.nextCost(def.id) ?? BigNumber.ZERO;
+      return {
+        id: def.id,
+        name: def.name,
+        icon: def.icon,
+        description: def.description,
+        level: this.upgrades.level(def.id),
+        maxed,
+        cost,
+        costCurrency: def.cost.currency,
+        affordable: !maxed && this.wallet.canAfford(def.cost.currency, cost),
+      };
+    });
+  }
+
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
 
   advance(dt: number): void {
@@ -238,6 +315,17 @@ export class Game implements Tickable {
 
   // ── Vnitřní helpery ─────────────────────────────────────────────────────────
 
+  private applyEffect(def: UpgradeDef, times: number): void {
+    switch (def.effect.type) {
+      case 'addPhone':
+        for (let i = 0; i < times * def.effect.value; i++) this.addPhone();
+        break;
+      case 'dopamineMultiplier':
+        // čte se dynamicky v productionMultiplier – žádná akce není potřeba.
+        break;
+    }
+  }
+
   private generatePost(): Post {
     return { rarity: rollRarity(this.virality, this.rng), baseValue: BASE_POST_VALUE };
   }
@@ -247,7 +335,7 @@ export class Game implements Tickable {
   }
 
   private globalMultiplier(): BigNumber {
-    return BigNumber.of(this.streakValue);
+    return BigNumber.of(this.streakValue).mul(this.productionMultiplier);
   }
 
   private reactionContext(): ReactionContext {
