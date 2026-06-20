@@ -11,7 +11,7 @@ kdy je doména hotová a otestovaná.
 | **F2 — Ekonomika & Upgrady** | „Kupuju, čísla rostou exponenciálně" | **UpgradeStore** (generický Purchasable) + **hromadný nákup**, hardware (další telefony), algoritmy (**dopamineMultiplier**), spodní lišta upgradů | ✅ |
 | **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, **penalizační křivka** (exp. zpomalení), network upgrady (📡☎️🛜). QoS alokace (M5) → odloženo | ✅ |
 | **F4 — Automatizace** | „Hra se hraje sama" | Boti **obsluhují telefony** (Auto-Liker/Scroller/Commenter) dle levelu, škálují s počtem telefonů, **Bandwidth náklad**, viditelný postih přetížení, **Pozornost (M1)**. (drobnost: streak bot-floor) | ✅ |
-| **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | Progrese platforem (+nové sítě C1), **Virality → Hidden Gems**, **Brain Rot** větev (C2), **Synergie (M2)**, content provider (~100 obrázků + text), rozšíření komentářů na ~100 | ⬜ |
+| **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | ✅ **Virality → Hidden Gems** (+T2 upgrade, T1 konfety). Zbývá: progrese platforem (+C1), **Brain Rot** větev (C2), **Synergie (M2)**, content provider | 🟡 |
 | **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, Zen shop, perzistence Clarity | ⬜ |
 | **F7 — Offline & Save** | „Zavřu a otevřu, progres zůstal" | localStorage save + autosave, verzování, **offline výpočet** (closed-form rate × čas, cap 8 h) — *předtaženo* | ✅ |
 | **F8 — UI & Juice** | „Vypadá to jako ta vize" | **Chaos Level (V1)** + WebGL shader overlay, **V3/V4** juice & color grading, **V2** dark patterns, audio, fixace rendereru (Pixi.js / raw WebGL) | ⬜ |
@@ -40,4 +40,4 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
 - ✅ **F3 hotová** — Bandwidth bottleneck (kapacita vs. spotřeba, exp. penalizace, síťové upgrady).
 - ✅ **F4 hotová** — boti obsluhují telefony (liker/scroller/commenter, škálují s telefony), viditelný postih sítě, **Pozornost (M1)**.
 - ✅ **F7 hotová (předtaženo)** — save/load do localStorage + autosave + offline těžba (cap 8 h).
-- ⬜ **Další** — F5: platformy (Text-It → … → NeuralFeed), Virality/Hidden Gems (+ T2 upgrade), Brain Rot větev, Synergie (M2).
+- 🟡 **F5 probíhá** — Virality/Hidden Gems (+T2 upgrade, T1 konfety) hotové; zbývá platformy, Brain Rot větev, Synergie (M2).

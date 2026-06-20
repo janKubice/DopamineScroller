@@ -273,9 +273,11 @@ game.bus.on('CommentResolved', (e) => {
   const br = r.brainRot.isPositive() ? ` +${r.brainRot.format()} 🧟` : '';
   pushNote(`${label}${gain}${br}`, 'note--outcome', 4000);
 });
+const CONFETTI_BY_RARITY: Record<string, number> = { rare: 14, epic: 30, legendary: 70 };
 game.bus.on('HiddenGemFound', (e) => {
   sound.gem();
   pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000);
+  confetti(CONFETTI_BY_RARITY[e.rarity] ?? 12);
 });
 game.bus.on('UpgradePurchased', (e) => {
   sound.upgrade();
@@ -326,6 +328,24 @@ function removeBubble(id: number): void {
   if (el) {
     el.remove();
     bubbleEls.delete(id);
+  }
+}
+
+// ── Confetti burst on rare+ posts (T1) ──
+const confettiLayer = document.createElement('div');
+confettiLayer.className = 'confetti-layer';
+document.body.appendChild(confettiLayer);
+
+function confetti(count: number): void {
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'confetti';
+    el.style.left = `${Math.random() * 100}%`;
+    el.style.background = `hsl(${Math.random() * 360}, 90%, 60%)`;
+    el.style.animationDuration = `${0.9 + Math.random() * 0.9}s`;
+    el.style.animationDelay = `${Math.random() * 0.2}s`;
+    confettiLayer.appendChild(el);
+    window.setTimeout(() => el.remove(), 2200);
   }
 }
 

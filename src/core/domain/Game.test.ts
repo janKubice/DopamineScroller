@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Game, REACTION_WINDOW } from './Game';
+import { Game, REACTION_WINDOW, expectedRarityMultiplier } from './Game';
 import { BigNumber } from '../math/BigNumber';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
@@ -403,6 +403,46 @@ describe('Game — early game pacing', () => {
     game.wallet.add('DOP', BigNumber.of(10));
     expect(game.buy('energy_drink', 1)).toBe(1);
     expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.15, 5);
+  });
+});
+
+describe('Game — virality & Hidden Gems', () => {
+  it('expectedRarityMultiplier roste s viralitou', () => {
+    expect(expectedRarityMultiplier(0)).toBeGreaterThan(1);
+    expect(expectedRarityMultiplier(2)).toBeGreaterThan(expectedRarityMultiplier(0));
+    expect(expectedRarityMultiplier(10)).toBeGreaterThan(expectedRarityMultiplier(2));
+  });
+
+  it('upgrady zvyšují viralitu', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.virality).toBe(0);
+    game.wallet.add('DOP', BigNumber.of(1e7));
+    game.buy('third_eye', 3); // +1.5
+    expect(game.virality).toBeCloseTo(1.5, 5);
+    game.buy('fake_news', 1); // +1.5
+    expect(game.virality).toBeCloseTo(3.0, 5);
+  });
+
+  it('vysoká virality produkuje vzácné posty (Hidden Gems)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    game.buy('third_eye', 20); // virality ~10
+    game.buy('fiber', 5);
+    game.buy('auto_scroller', 20);
+    for (let i = 0; i < 25; i++) game.addPhone();
+    let gems = 0;
+    game.bus.on('HiddenGemFound', () => gems++);
+    for (let i = 0; i < 300; i++) game.advance(0.1);
+    expect(gems).toBeGreaterThan(0);
+  });
+
+  it('virality se serializuje jako base (bez dvojího počítání upgradů)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e7));
+    game.buy('third_eye', 2); // virality 1.0
+    const restored = new Game({ seed: 2 });
+    restored.loadSave(game.serialize());
+    expect(restored.virality).toBeCloseTo(game.virality, 5);
   });
 });
 

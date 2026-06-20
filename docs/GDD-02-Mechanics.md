@@ -87,6 +87,12 @@ rarity = rollRarity(virality, rng)   // seedovaný RNG, deterministicky
 rarityMultiplier = { Common:1, Rare:5, Epic:25, Legendary:100 }[rarity]
 ```
 
+> ✅ **Implementováno:** `Game.virality` = base + upgrady (`virality` efekt): 👁️ **Third Eye**
+> (+0.5/level), 📰 **Fake News Syndicate** (+1.5). Šance: `rare = 0.05·(1+virality)`,
+> `epic = 0.01·(1+virality)`, `legendary = 0.001·(1+virality)`. Rare+ post emituje
+> `HiddenGemFound` → v harnessu **konfety** (počet dle rarity) + zvuk. `expectedRarityMultiplier`
+> se používá v odhadu příjmu a offline. (Shares-driven virality přijde s M2 synergiemi.)
+
 ## 6. Prestige: Dopamine Overdose
 
 - **Trigger:** překročení kritického Dopaminu/s nebo milníku v Brain Rot stromu.

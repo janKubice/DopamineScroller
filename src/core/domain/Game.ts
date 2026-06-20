@@ -121,8 +121,8 @@ function rollRarity(virality: number, rng: Rng): Rarity {
   return 'common';
 }
 
-/** Očekávaný multiplikátor rarity (pro odhad pasivního/offline příjmu). */
-function expectedRarityMultiplier(virality: number): number {
+/** Očekávaný multiplikátor rarity (pro odhad pasivního/offline příjmu a balanc). */
+export function expectedRarityMultiplier(virality: number): number {
   const { legendary, epic, rare } = rarityChances(virality);
   const common = Math.max(0, 1 - legendary - epic - rare);
   return common * RARITY_MULTIPLIER.common +
@@ -181,7 +181,7 @@ export class Game implements Tickable {
   private autoCommentBudget = 0;
   private attentionValue = MAX_ATTENTION;
   private streakValue = STREAK_FLOOR;
-  private virality = 0;
+  private viralityBase = 0;
   private nextPhoneId = 1;
   private readonly likeYield = BigNumber.ONE;
 
@@ -224,6 +224,11 @@ export class Game implements Tickable {
 
   private spendAttention(cost: number): void {
     this.attentionValue = Math.max(0, this.attentionValue - cost);
+  }
+
+  /** Virality (M5/§5): šance na vzácné posty. Base + upgrady (Third Eye, Fake News). */
+  get virality(): number {
+    return this.viralityBase + this.sumEffect('virality');
   }
 
   /** Globální multiplikátor produkce z algoritmů (součin koupených dopamineMultiplier). */
@@ -472,7 +477,7 @@ export class Game implements Tickable {
       wallet: this.wallet.serialize(),
       upgrades: this.upgrades.serialize(),
       streak: this.streakValue,
-      virality: this.virality,
+      virality: this.viralityBase,
       phoneCount: this.phones.length,
     };
   }
@@ -483,7 +488,7 @@ export class Game implements Tickable {
     this.wallet.load(data.wallet);
     this.upgrades.loadLevels(data.upgrades);
     this.streakValue = data.streak;
-    this.virality = data.virality;
+    this.viralityBase = data.virality;
     this.reactions.length = 0;
     this.pendingComments.clear();
     this.bubbles.length = 0;
@@ -712,6 +717,9 @@ export class Game implements Tickable {
       case 'bubbleValueMult':
       case 'bubbleRate':
         // čtou se dynamicky v minihře – žádná akce není potřeba.
+        break;
+      case 'virality':
+        // čte se dynamicky v get virality – žádná akce není potřeba.
         break;
     }
   }

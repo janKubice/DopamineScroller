@@ -93,7 +93,11 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > bot nestíhá počet telefonů, posty se hromadí nelajkané/nezahozené → tlak kupovat lepší boty.
 > Offline = closed-form swipe-cykly (`effectiveSwipesPerSecond`). Balanc konstanty → JSON (Fáze 9).
 
-> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **25 upgradů** seřazených
+> **Virality (Hidden Gems):** 👁️ **Third Eye** (DOP 400 ·1.45, +0.5 virality/lvl),
+> 📰 **Fake News Syndicate** (DOP 5000, +1.5 virality, max 1). Vyšší virality = víc Rare/Epic/
+> Legendary postů (`Game.virality`, efekt `virality`).
+
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **27 upgradů** seřazených
 > od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
 > kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
 > For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),

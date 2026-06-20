@@ -16,7 +16,8 @@ export type UpgradeEffectType =
   | 'autoCommentRate' // bot: komentářů/s (auto-commenter)
   | 'bubbleUnlock' // odemkne minihru s bublinami
   | 'bubbleValueMult' // násobí hodnotu bublin
-  | 'bubbleRate'; // zvyšuje frekvenci bublin
+  | 'bubbleRate' // zvyšuje frekvenci bublin
+  | 'virality'; // zvyšuje šanci na vzácné posty (Hidden Gems)
 
 export interface UpgradeDef {
   readonly id: string;
@@ -217,6 +218,14 @@ export const UPGRADES: readonly UpgradeDef[] = [
     effect: { type: 'dopamineMultiplier', value: 1.25 },
   },
   {
+    id: 'third_eye',
+    name: 'Third Eye',
+    description: 'See the hidden gems. +0.5 virality per level (more Rare/Epic/Legendary posts).',
+    icon: '👁️',
+    cost: { currency: 'DOP', base: 400, multiplier: 1.45 },
+    effect: { type: 'virality', value: 0.5 },
+  },
+  {
     id: 'verified_badge',
     name: 'Verified Badge',
     description: 'Pay to feel important. +50% Dopamine.',
@@ -242,6 +251,15 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 3000, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.4 },
+  },
+  {
+    id: 'fake_news',
+    name: 'Fake News Syndicate',
+    description: 'Conspiracy sells. +1.5 virality (much higher Hidden Gem chance).',
+    icon: '📰',
+    cost: { currency: 'DOP', base: 5000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'virality', value: 1.5 },
   },
   {
     id: 'fiber',

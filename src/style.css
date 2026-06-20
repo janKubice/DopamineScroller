@@ -450,3 +450,28 @@ html.overloaded .spinner {
   border-top-color: #c92a2a;
   animation-duration: 2.4s; /* viditelně pomalejší = „crawling" */
 }
+
+/* ── Confetti (rare+ posty, T1) ── */
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 35;
+  overflow: hidden;
+}
+
+.confetti {
+  position: absolute;
+  top: -16px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+
+@keyframes confetti-fall {
+  to {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: 0.15;
+  }
+}
