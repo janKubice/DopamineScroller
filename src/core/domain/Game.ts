@@ -91,6 +91,16 @@ const MAX_BUBBLES = 2; // max bublin naráz
 const BUBBLE_REWARD_FACTOR = 2; // hodnota ≈ 2 swipy (před upgrady hodnoty)
 const BUBBLE_MIN_REWARD = 2; // minimální odměna
 
+// ── Pozornost (M1): lidský bottleneck. Boti ji nestojí, manuál ano. ──
+const MAX_ATTENTION = 100;
+const ATTENTION_REGEN = 8; // /s (z nuly plně za ~12 s)
+const ATTENTION_COST_SWIPE = 6;
+const ATTENTION_COST_LIKE = 3;
+const ATTENTION_COST_COMMENT = 5;
+const ATTENTION_COST_BUBBLE = 4;
+const FOCUS_MIN = 0.35; // minimální násobič odměny manuálu při vyčerpané pozornosti
+const FOCUS_THRESHOLD = 0.35; // pod tímto podílem pozornosti se penalizace plně projeví
+
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
 
@@ -169,6 +179,7 @@ export class Game implements Tickable {
   private autoLikeBudget = 0;
   private autoSwipeBudget = 0;
   private autoCommentBudget = 0;
+  private attentionValue = MAX_ATTENTION;
   private streakValue = STREAK_FLOOR;
   private virality = 0;
   private nextPhoneId = 1;
@@ -195,6 +206,24 @@ export class Game implements Tickable {
 
   get dopamine(): BigNumber {
     return this.wallet.get('DOP');
+  }
+
+  /** Pozornost (M1): regenerující se lidský zdroj. */
+  get attention(): number {
+    return this.attentionValue;
+  }
+  get maxAttention(): number {
+    return MAX_ATTENTION;
+  }
+
+  /** Násobič odměny manuálních akcí dle pozornosti (1 = svěží, FOCUS_MIN = vyčerpaný). */
+  get focusFactor(): number {
+    const ratio = this.attentionValue / MAX_ATTENTION;
+    return FOCUS_MIN + (1 - FOCUS_MIN) * Math.min(1, ratio / FOCUS_THRESHOLD);
+  }
+
+  private spendAttention(cost: number): void {
+    this.attentionValue = Math.max(0, this.attentionValue - cost);
   }
 
   /** Globální multiplikátor produkce z algoritmů (součin koupených dopamineMultiplier). */
@@ -286,11 +315,14 @@ export class Game implements Tickable {
 
   // ── Commands (Prezentace → Doména) ──────────────────────────────────────────
 
-  swipe(phoneId: number): SwipeResult | null {
+  swipe(phoneId: number, manual = true): SwipeResult | null {
     const phone = this.getPhone(phoneId);
     if (!phone) return null;
-    const result = phone.swipe(this.globalMultiplier());
+    // Manuál: méně pozornosti = menší odměna (focusFactor). Boti penalizaci nepodléhají.
+    const focus = manual ? this.focusFactor : 1;
+    const result = phone.swipe(this.globalMultiplier().mul(BigNumber.of(focus)));
     if (!result) return null;
+    if (manual) this.spendAttention(ATTENTION_COST_SWIPE);
     this.credit('DOP', result.dopamine);
     this.bumpStreak();
     this.bus.emit('SwipeResolved', { phoneId, dopamine: result.dopamine, rarity: result.rarity });
@@ -300,11 +332,12 @@ export class Game implements Tickable {
     return result;
   }
 
-  like(phoneId: number): BigNumber | null {
+  like(phoneId: number, manual = true): BigNumber | null {
     const phone = this.getPhone(phoneId);
     if (!phone) return null;
     const gained = phone.like(this.likeYield);
     if (!gained) return null;
+    if (manual) this.spendAttention(ATTENTION_COST_LIKE);
     this.credit('LIK', gained);
     this.bus.emit('Liked', { phoneId, likes: gained });
     return gained;
@@ -324,7 +357,7 @@ export class Game implements Tickable {
    * NEPŘICHÁZÍ hned — naskakují postupně během REACTION_WINDOW (viz advance). Outcome
    * se hráči ukáže až eventem CommentResolved. Vrací, zda se komentář povedlo postnout.
    */
-  postComment(phoneId: number, commentId: string): boolean {
+  postComment(phoneId: number, commentId: string, manual = true): boolean {
     const phone = this.getPhone(phoneId);
     if (!phone || !phone.canComment) return false;
     const offered = this.pendingComments.get(phoneId);
@@ -334,6 +367,7 @@ export class Game implements Tickable {
     const result = this.comments.resolve(def, this.reactionContext(), this.rng);
     this.pendingComments.delete(phoneId);
     phone.markCommented();
+    if (manual) this.spendAttention(ATTENTION_COST_COMMENT);
     this.credit('COM', BigNumber.ONE);
 
     this.reactions.push({
@@ -376,16 +410,19 @@ export class Game implements Tickable {
     return n;
   }
 
-  /** Minihra: sebere dopaminovou bublinu, připíše Dopamin a posílí streak. */
+  /** Minihra: sebere dopaminovou bublinu (manuál → stojí Pozornost, odměna × focus). */
   popBubble(id: number): BigNumber | null {
     const idx = this.bubbles.findIndex((b) => b.id === id);
     if (idx < 0) return null;
     const bubble = this.bubbles[idx]!;
     this.bubbles.splice(idx, 1);
-    this.credit('DOP', bubble.value);
+    const focus = this.focusFactor;
+    this.spendAttention(ATTENTION_COST_BUBBLE);
+    const value = bubble.value.mul(BigNumber.of(focus));
+    this.credit('DOP', value);
     this.bumpStreak();
-    this.bus.emit('BubblePopped', { id, value: bubble.value });
-    return bubble.value;
+    this.bus.emit('BubblePopped', { id, value });
+    return value;
   }
 
   /** View model upgradů pro prezentaci (spodní lišta). */
@@ -455,6 +492,7 @@ export class Game implements Tickable {
     this.autoLikeBudget = 0;
     this.autoSwipeBudget = 0;
     this.autoCommentBudget = 0;
+    this.attentionValue = MAX_ATTENTION;
     this.phones.length = 0;
     this.nextPhoneId = 1;
     const count = Math.max(1, Math.floor(data.phoneCount));
@@ -496,6 +534,7 @@ export class Game implements Tickable {
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
 
   advance(dt: number): void {
+    this.attentionValue = Math.min(MAX_ATTENTION, this.attentionValue + ATTENTION_REGEN * dt);
     this.setStreak(Math.max(STREAK_FLOOR, this.streakValue - STREAK_DECAY * dt));
     // Přetížení sítě zpomalí buffering všech telefonů stejně.
     const scale = this.bandwidthBufferScale;
@@ -584,7 +623,7 @@ export class Game implements Tickable {
     while (this.autoLikeBudget >= 1) {
       const phone = this.phones.find((p) => p.canLike);
       if (!phone) break;
-      this.like(phone.id);
+      this.like(phone.id, false);
       this.autoLikeBudget -= 1;
     }
     while (this.autoCommentBudget >= 1) {
@@ -596,15 +635,15 @@ export class Game implements Tickable {
     while (this.autoSwipeBudget >= 1) {
       const phone = this.phones.find((p) => p.isReady && p.readyElapsed >= AUTO_SCROLL_GRACE);
       if (!phone) break;
-      this.swipe(phone.id);
+      this.swipe(phone.id, false);
       this.autoSwipeBudget -= 1;
     }
   }
 
-  /** Auto-commenter: vybere náhodný komentář a postne ho (vyřeší ruletu sám). */
+  /** Auto-commenter: vybere náhodný komentář a postne ho (vyřeší ruletu sám, bez pozornosti). */
   private autoCommentPhone(phoneId: number): void {
     const def = this.comments.offer(this.rng, 1)[0];
-    if (def) this.postComment(phoneId, def.id);
+    if (def) this.postComment(phoneId, def.id, false);
   }
 
   /** Postupné „naskakování" reakcí na komentáře a průběžné připisování odměn. */

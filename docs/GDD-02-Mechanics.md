@@ -110,21 +110,23 @@ Detail Zen obchodu: `GDD-03 §5`.
 > **sekvencování ve vývoji** se přesto řídí závislostmi (viz roadmapa `GDD-06`).
 > M5 (QoS) je rozšíření bottlenecku, popsáno výše v §3.1.
 
-## M1 — Pozornost (Focus): lidský bottleneck
+## M1 — Pozornost (Focus): lidský bottleneck  ✅ implementováno
 Druhý zdroj vedle Bandwidth. Bandwidth omezuje **stroje**, Pozornost omezuje **člověka**.
 
-- `Attention` je regenerující se zdroj (`max`, `regenPerSec`).
-- Každá **manuální** akce stojí `attentionCost`. Pod prahem → `manualSpeed` ↓ a vzniká
-  `misclickChance` (klikneš omylem Share místo Like → ztráta).
-- **Dvojí ekonomika rozhodování:** boti stojí Bandwidth, ale šetří Pozornost; manuál stojí
-  Pozornost, ale ne Bandwidth. Skutečný strop není internet, ale mozková kapacita.
+- `attention` je regenerující se zdroj (`MAX_ATTENTION = 100`, `ATTENTION_REGEN = 8/s`).
+- Každá **manuální** akce stojí pozornost: swipe 6, like 3, comment 5, bublina 4.
+  **Boti ji nestojí** (volají akce s `manual=false`).
+- Při poklesu pozornosti klesá **`focusFactor`** (1 → `FOCUS_MIN = 0.35`), který násobí
+  odměnu manuálního swipe a bubliny → vyčerpaný hráč „scrolluje naprázdno".
 
 ```
-if attention < threshold:
-    manualSpeed   *= LOW_FOCUS_PENALTY
-    misclickChance = lerp(0, MAX_MISCLICK, (threshold - attention)/threshold)
+focusFactor = FOCUS_MIN + (1 - FOCUS_MIN) * min(1, (attention/MAX) / FOCUS_THRESHOLD)
 ```
-> Fáze 4 (spolu s boty).
+
+- **Dvojí ekonomika rozhodování:** boti stojí Bandwidth, ale šetří Pozornost; manuál stojí
+  Pozornost, ale ne Bandwidth. Při 1 telefonu pozornost nikdy nedojde; **multitasking mnoha
+  telefonů ručně ji vyčerpá** → tlak automatizovat. Skutečný strop není internet, ale mozek.
+- HUD: `🎯 %` (oranžová + 😵 při únavě). Implementace: `Game.attention`/`focusFactor`/`spendAttention`.
 
 ## M2 — Synergie měn
 Uzavřený trojúhelník mikro-měn + cross-platform bonus:

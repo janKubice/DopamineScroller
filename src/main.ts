@@ -73,12 +73,18 @@ function renderHud(): void {
   const dps = game.estimatedDopaminePerSecond;
   const rate = dps.isPositive() ? `<span class="hud__item hud__rate">~${dps.format()}/s 🧠</span>` : '';
   const overload = game.isOverloaded;
+  const att = Math.round(game.attention);
+  const fatigued = game.focusFactor < 0.999;
+  const focusItem =
+    `<span class="hud__item ${fatigued ? 'hud__fatigued' : ''}" ` +
+    `title="Attention — manual actions cost focus; bots don't">🎯 ${att}%${fatigued ? ' 😵' : ''}</span>`;
   hud.innerHTML =
     money +
     rate +
     `<span class="hud__item">📱 ${game.phones.length}</span>` +
     `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
     `📶 ${game.bandwidthConsumption}/${game.totalBandwidth}${overload ? ' ⚠️' : ''}</span>` +
+    focusItem +
     `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
 }
 

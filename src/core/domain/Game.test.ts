@@ -405,3 +405,51 @@ describe('Game — early game pacing', () => {
     expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.15, 5);
   });
 });
+
+describe('Game — Pozornost (M1)', () => {
+  it('startuje na maximu a focus = 1', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.attention).toBe(game.maxAttention);
+    expect(game.focusFactor).toBe(1);
+  });
+
+  it('manuální swipe stojí Pozornost', () => {
+    const game = new Game({ seed: 1 });
+    game.advance(game.phones[0]!.config.bufferTime); // ready
+    const before = game.attention;
+    game.swipe(1);
+    expect(game.attention).toBeLessThan(before);
+  });
+
+  it('boti Pozornost nestojí', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_scroller', 5); // rychlý auto-scroller
+    for (let i = 0; i < 100; i++) game.advance(0.1); // boti swipují
+    expect(game.attention).toBe(game.maxAttention); // regenerace drží na maxu
+  });
+
+  it('Pozornost se po útratě regeneruje', () => {
+    const game = new Game({ seed: 1 });
+    game.advance(3); // ready
+    game.swipe(1);
+    const low = game.attention;
+    expect(low).toBeLessThan(game.maxAttention);
+    game.advance(1); // +regen
+    expect(game.attention).toBeGreaterThan(low);
+  });
+
+  it('hodně manuálních swipů naráz vyčerpá Pozornost a sníží focus', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e7));
+    game.buy('fiber', 1); // dost sítě
+    for (let i = 0; i < 25; i++) game.addPhone();
+    game.advance(5); // všechny ready
+    expect(game.focusFactor).toBe(1);
+    for (const p of game.phones) {
+      if (p.isReady) game.swipe(p.id); // bez advance -> bez regenerace
+    }
+    expect(game.attention).toBeLessThan(game.maxAttention);
+    expect(game.focusFactor).toBeLessThan(1);
+  });
+});

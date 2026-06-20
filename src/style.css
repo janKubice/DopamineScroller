@@ -91,6 +91,10 @@ body {
   animation: pulse 1s ease-in-out infinite;
 }
 
+.hud__fatigued {
+  color: #e8590c;
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.5;
