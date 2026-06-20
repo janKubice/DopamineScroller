@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Game } from './Game';
+import { Game, REACTION_WINDOW } from './Game';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -43,10 +43,11 @@ describe('Game — core loop', () => {
     expect(resolved).toBe(1);
   });
 
-  it('like připíše Likes', () => {
+  it('like jde dát jen jednou na post', () => {
     const game = new Game({ seed: 1 });
     advanceToReady(game);
     expect(game.like(1)?.toNumber()).toBe(1);
+    expect(game.like(1)).toBeNull(); // už lajknuto
     expect(game.wallet.get('LIK').toNumber()).toBe(1);
   });
 
@@ -82,16 +83,36 @@ describe('Game — komentářová ruleta', () => {
     expect(game.offerComments(1)).toBeNull();
   });
 
-  it('postComment vyhodnotí reakci a započítá Comment', () => {
+  it('komentář jde dát jen jednou na post', () => {
     const game = new Game({ seed: 1 });
     advanceToReady(game);
     const offered = game.offerComments(1)!;
-    const result = game.postComment(1, offered[0]!.id);
-    expect(result).not.toBeNull();
-    expect(result!.commentId).toBe(offered[0]!.id);
+    expect(game.postComment(1, offered[0]!.id)).toBe(true);
+    expect(game.postComment(1, offered[0]!.id)).toBe(false); // už okomentováno
+    expect(game.offerComments(1)).toBeNull();
+  });
+
+  it('reakce přicházejí opožděně – outcome až po REACTION_WINDOW', () => {
+    const game = new Game({ seed: 1 });
+    advanceToReady(game);
+    const offered = game.offerComments(1)!;
+
+    let resolved: { result: { likes: number } } | null = null;
+    game.bus.on('CommentResolved', (e) => (resolved = e));
+
+    expect(game.postComment(1, offered[0]!.id)).toBe(true);
     expect(game.wallet.get('COM').toNumber()).toBe(1);
-    // net = likes - dislikes; odměna i penalizace jsou nezáporné
-    expect(result!.likes).toBeGreaterThanOrEqual(0);
-    expect(result!.dislikes).toBeGreaterThanOrEqual(0);
+
+    // hned po postnutí outcome ještě není known
+    game.advance(REACTION_WINDOW / 2);
+    expect(resolved).toBeNull();
+
+    // po doběhnutí okna se vyhodnotí
+    game.advance(REACTION_WINDOW);
+    expect(resolved).not.toBeNull();
+
+    // všechny "naskákané" liky se připsaly do LIK
+    const r = resolved as unknown as { result: { likes: number } };
+    expect(game.wallet.get('LIK').toNumber()).toBe(r.result.likes);
   });
 });

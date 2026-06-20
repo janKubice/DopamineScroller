@@ -7,6 +7,7 @@ import { BigNumber } from '../math/BigNumber';
  *                                        │
  *                              (like / comment řeší Game)
  *
+ * Na jeden načtený post lze dát Like a Komentář vždy jen JEDNOU (jako na reálné síti).
  * Telefon je generický vůči ekonomice: posty si generuje přes injektovanou továrnu
  * `postFactory`, takže nezná platformy, viralitu ani algoritmy (ty žijí v Game).
  */
@@ -30,7 +31,6 @@ export interface Post {
 export interface PhoneConfig {
   bufferTime: number; // s
   swipeTime: number; // s
-  likeCooldown: number; // s
 }
 
 export interface SwipeResult {
@@ -44,16 +44,15 @@ export type PhoneTick = { type: 'ready'; rarity: Rarity } | null;
 export const DEFAULT_PHONE_CONFIG: PhoneConfig = {
   bufferTime: 3,
   swipeTime: 0.3,
-  likeCooldown: 0.25,
 };
 
 export class Phone {
   state: PhoneState = 'buffering';
   bufferRemaining: number;
   swipeRemaining = 0;
-  likeCooldownRemaining = 0;
   post: Post | null = null;
-  likesThisPost = 0;
+  liked = false;
+  commented = false;
 
   constructor(
     readonly id: number,
@@ -68,16 +67,14 @@ export class Phone {
    * Bandwidth (Fáze 3) bude < 1 → načítání trvá déle. Viz docs/GDD-02-Mechanics.md §3.
    */
   advance(dt: number, bufferScale = 1): PhoneTick {
-    if (this.likeCooldownRemaining > 0) {
-      this.likeCooldownRemaining = Math.max(0, this.likeCooldownRemaining - dt);
-    }
-
     switch (this.state) {
       case 'buffering': {
         this.bufferRemaining -= dt * bufferScale;
         if (this.bufferRemaining <= 0) {
           this.post = this.postFactory();
           this.bufferRemaining = 0;
+          this.liked = false;
+          this.commented = false;
           this.state = 'ready';
           return { type: 'ready', rarity: this.post.rarity };
         }
@@ -100,15 +97,25 @@ export class Phone {
   }
 
   get canLike(): boolean {
-    return this.isReady && this.likeCooldownRemaining <= 0;
+    return this.isReady && !this.liked;
   }
 
-  /** Manuální Like. Vrací získané Likes, nebo null pokud nelze. */
+  get canComment(): boolean {
+    return this.isReady && !this.commented;
+  }
+
+  /** Manuální Like — jen jednou na post. Vrací získané Likes, nebo null. */
   like(yieldPerLike: BigNumber): BigNumber | null {
     if (!this.canLike) return null;
-    this.likesThisPost++;
-    this.likeCooldownRemaining = this.config.likeCooldown;
+    this.liked = true;
     return yieldPerLike;
+  }
+
+  /** Označí post jako okomentovaný (komentovat lze jen jednou). Vrací úspěch. */
+  markCommented(): boolean {
+    if (!this.canComment) return false;
+    this.commented = true;
+    return true;
   }
 
   /**
@@ -124,7 +131,6 @@ export class Phone {
     this.state = 'swiping';
     this.swipeRemaining = this.config.swipeTime;
     this.post = null;
-    this.likesThisPost = 0;
     return { dopamine, rarity };
   }
 
@@ -133,6 +139,7 @@ export class Phone {
     this.bufferRemaining = this.config.bufferTime;
     this.swipeRemaining = 0;
     this.post = null;
-    this.likesThisPost = 0;
+    this.liked = false;
+    this.commented = false;
   }
 }

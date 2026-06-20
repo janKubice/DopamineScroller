@@ -1,43 +1,109 @@
-/* Dev harness styl (dočasný). Skutečný vizuál řeší Fáze 8 (viz GDD-04). */
+/* Dev harness styling (temporary). Final visuals are Phase 8 (see GDD-04). */
 :root {
   color-scheme: light;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bg: #fafafa;
+  --ink: #1a1a1a;
+  --line: #222;
+  --accent: #2563eb;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  background: #fafafa;
-  color: #1a1a1a;
+  background: var(--bg);
+  color: var(--ink);
 }
 
 #app {
-  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e3e3e3;
+  background: #fff;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.brand__logo {
+  font-size: 22px;
+}
+
+/* ── HUD (currencies) ── */
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  padding: 16px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__streak {
+  color: #d9480f;
+}
+
+/* ── Stage / phone ── */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px 24px;
 }
 
 .phone {
-  width: 240px;
-  margin: 0 auto;
-  border: 2px solid #222;
-  border-radius: 24px;
+  width: 260px;
+  border: 2px solid var(--line);
+  border-radius: 26px;
   padding: 16px;
   background: #fff;
 }
 
 .phone__screen {
-  min-height: 200px;
-  border-radius: 12px;
+  min-height: 220px;
+  border-radius: 14px;
   background: #f0f0f0;
   display: grid;
   place-items: center;
   padding: 12px;
 }
 
+.post {
+  text-align: center;
+  font-size: 40px;
+  line-height: 1.3;
+}
+
+.post small {
+  font-size: 13px;
+  opacity: 0.6;
+}
+
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border: 4px solid #ddd;
   border-top-color: #888;
   border-radius: 50%;
@@ -45,25 +111,143 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-button {
+/* ── Icon buttons ── */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.icon-btn {
   font: inherit;
-  padding: 8px 14px;
-  margin: 4px;
-  border: 1px solid #333;
-  border-radius: 8px;
+  font-size: 22px;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cfcfcf;
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+  transition: transform 0.05s, background 0.15s, border-color 0.15s;
+}
+
+.icon-btn:hover {
+  border-color: #999;
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn[disabled] {
+  cursor: default;
+}
+
+.icon-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  filter: saturate(1.2);
+}
+
+.topbar__settings {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
+/* ── Comment choices ── */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, 92vw);
+}
+
+.choices__label {
+  margin: 4px 0;
+  text-align: center;
+  opacity: 0.6;
+  font-size: 13px;
+}
+
+.choice {
+  font: inherit;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid #d4d4d4;
+  border-radius: 10px;
   background: #fff;
   cursor: pointer;
 }
 
-button:disabled {
-  opacity: 0.4;
-  cursor: default;
+.choice:hover {
+  border-color: var(--accent);
 }
 
-.hud {
-  margin-bottom: 16px;
-  font-variant-numeric: tabular-nums;
+/* ── Notifications (reactions stream in here) ── */
+.notifications {
+  position: fixed;
+  right: 16px;
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.note {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  animation: pop 0.18s ease-out;
+}
+
+.note--like {
+  color: #1d7a34;
+}
+.note--dislike {
+  color: #b02a37;
+}
+.note--outcome {
+  font-size: 15px;
+  background: #fff7e6;
+  border-color: #ffd591;
+}
+.note--gem {
+  background: #fffbe6;
+  border-color: #ffe58f;
+  color: #ad8b00;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* ── Bottom upgrades bar (placeholder for Phase 2) ── */
+.upgrades {
+  border-top: 1px solid #e3e3e3;
+  background: #fff;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upgrades__hint {
+  opacity: 0.45;
+  font-size: 14px;
 }

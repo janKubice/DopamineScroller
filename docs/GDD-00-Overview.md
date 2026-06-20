@@ -39,6 +39,10 @@ nekonečný scroll, FOMO, dark patterns) a zároveň je **pojmenuje**.
 > bez instalace. TypeScript zachovává původní architektonický princip — striktní
 > oddělení logiky od prezentace — a doménová vrstva zůstává agnostická vůči rendereru.
 
+**Jazyk:** Hra (player-facing: UI i obsah jako komentáře) je **anglicky** kvůli
+mezinárodnímu publiku na itch.io. Tyto **GDD dokumenty zůstávají česky** jako interní
+podklad pro vývoj.
+
 ## 4. Core Gameplay Loop (přehled)
 
 ```

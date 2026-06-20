@@ -26,7 +26,11 @@ export interface GameEvents extends EventMap {
   SwipeResolved: { phoneId: number; dopamine: BigNumber; rarity: Rarity };
   HiddenGemFound: { phoneId: number; rarity: Rarity };
   Liked: { phoneId: number; likes: BigNumber };
-  CommentPosted: { phoneId: number; result: CommentResult };
+  CommentPosted: { phoneId: number; commentId: string };
+  /** Jeden „naskočený" lajk/dislajk během reakce na komentář. */
+  CommentReaction: { phoneId: number; kind: 'like' | 'dislike'; emitted: number };
+  /** Konec reakce – outcome se hráči ukáže AŽ tady (opožděně). */
+  CommentResolved: { phoneId: number; result: CommentResult };
   CurrencyChanged: { id: CurrencyId; total: BigNumber };
   StreakChanged: { value: number };
 }
@@ -38,6 +42,9 @@ const STREAK_STEP = 0.1;
 const STREAK_DECAY = 0.2; // za sekundu
 const BASE_POST_VALUE = BigNumber.of(1); // Text-It: nízký base Dopamin
 
+/** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
+export const REACTION_WINDOW = 4; // s
+
 function rollRarity(virality: number, rng: Rng): Rarity {
   const r = rng.next();
   const legendary = 0.001 * (1 + virality);
@@ -47,6 +54,17 @@ function rollRarity(virality: number, rng: Rng): Rarity {
   if (r < legendary + epic) return 'epic';
   if (r < legendary + epic + rare) return 'rare';
   return 'common';
+}
+
+/** Probíhající reakce na komentář, která se vyhodnocuje postupně v čase. */
+interface ActiveReaction {
+  phoneId: number;
+  result: CommentResult;
+  duration: number;
+  elapsed: number;
+  emittedLikes: number;
+  emittedDislikes: number;
+  creditedFraction: number;
 }
 
 export interface GameOptions {
@@ -69,6 +87,7 @@ export class Game implements Tickable {
 
   private readonly comments: CommentPool;
   private readonly pendingComments = new Map<number, CommentDef[]>();
+  private readonly reactions: ActiveReaction[] = [];
   private streakValue = STREAK_FLOOR;
   private virality = 0;
   private nextPhoneId = 1;
@@ -124,34 +143,40 @@ export class Game implements Tickable {
   /** Komentářová ruleta, krok 1: nabídne `count` různých komentářů k výběru. */
   offerComments(phoneId: number, count = 3): CommentDef[] | null {
     const phone = this.getPhone(phoneId);
-    if (!phone || !phone.isReady) return null;
+    if (!phone || !phone.canComment) return null;
     const offered = this.comments.offer(this.rng, count);
     this.pendingComments.set(phoneId, offered);
     return offered;
   }
 
-  /** Komentářová ruleta, krok 2: postne vybraný komentář a vyhodnotí reakce. */
-  postComment(phoneId: number, commentId: string): CommentResult | null {
+  /**
+   * Komentářová ruleta, krok 2: postne vybraný komentář. Reakce (liky/disliky) ale
+   * NEPŘICHÁZÍ hned — naskakují postupně během REACTION_WINDOW (viz advance). Outcome
+   * se hráči ukáže až eventem CommentResolved. Vrací, zda se komentář povedlo postnout.
+   */
+  postComment(phoneId: number, commentId: string): boolean {
     const phone = this.getPhone(phoneId);
-    if (!phone || !phone.isReady) return null;
+    if (!phone || !phone.canComment) return false;
     const offered = this.pendingComments.get(phoneId);
     const def = offered?.find((c) => c.id === commentId) ?? this.comments.byId(commentId);
-    if (!def) return null;
+    if (!def) return false;
 
     const result = this.comments.resolve(def, this.reactionContext(), this.rng);
     this.pendingComments.delete(phoneId);
-
-    if (result.dopamine.isPositive()) this.credit('DOP', result.dopamine);
-    if (result.brainRot.isPositive()) this.credit('BR', result.brainRot);
-    if (result.penalty.isPositive()) this.debit('DOP', result.penalty);
-    if (result.likes > 0) this.credit('LIK', BigNumber.of(result.likes));
+    phone.markCommented();
     this.credit('COM', BigNumber.ONE);
 
-    if (result.outcome === 'viral') this.bumpStreak();
-    else if (result.outcome === 'flop') this.dampStreak();
-
-    this.bus.emit('CommentPosted', { phoneId, result });
-    return result;
+    this.reactions.push({
+      phoneId,
+      result,
+      duration: REACTION_WINDOW,
+      elapsed: 0,
+      emittedLikes: 0,
+      emittedDislikes: 0,
+      creditedFraction: 0,
+    });
+    this.bus.emit('CommentPosted', { phoneId, commentId });
+    return true;
   }
 
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
@@ -162,6 +187,51 @@ export class Game implements Tickable {
       const tick = phone.advance(dt);
       if (tick?.type === 'ready') {
         this.bus.emit('PostReady', { phoneId: phone.id, rarity: tick.rarity });
+      }
+    }
+    this.advanceReactions(dt);
+  }
+
+  /** Postupné „naskakování" reakcí na komentáře a průběžné připisování odměn. */
+  private advanceReactions(dt: number): void {
+    if (this.reactions.length === 0) return;
+    for (let i = this.reactions.length - 1; i >= 0; i--) {
+      const r = this.reactions[i]!;
+      r.elapsed += dt;
+      const p = Math.min(1, r.elapsed / r.duration);
+
+      const targetLikes = Math.round(p * r.result.likes);
+      while (r.emittedLikes < targetLikes) {
+        r.emittedLikes++;
+        this.wallet.add('LIK', BigNumber.ONE);
+        this.bus.emit('CommentReaction', { phoneId: r.phoneId, kind: 'like', emitted: r.emittedLikes });
+      }
+      const targetDislikes = Math.round(p * r.result.dislikes);
+      while (r.emittedDislikes < targetDislikes) {
+        r.emittedDislikes++;
+        this.bus.emit('CommentReaction', { phoneId: r.phoneId, kind: 'dislike', emitted: r.emittedDislikes });
+      }
+
+      const fracDelta = p - r.creditedFraction;
+      if (fracDelta > 0) {
+        const f = BigNumber.of(fracDelta);
+        if (r.result.dopamine.isPositive()) this.wallet.add('DOP', r.result.dopamine.mul(f));
+        if (r.result.brainRot.isPositive()) this.wallet.add('BR', r.result.brainRot.mul(f));
+        if (r.result.penalty.isPositive()) {
+          const pen = r.result.penalty.mul(f);
+          this.wallet.spend('DOP', BigNumber.min(this.wallet.get('DOP'), pen));
+        }
+        r.creditedFraction = p;
+      }
+
+      if (p >= 1) {
+        this.bus.emit('CurrencyChanged', { id: 'DOP', total: this.wallet.get('DOP') });
+        this.bus.emit('CurrencyChanged', { id: 'LIK', total: this.wallet.get('LIK') });
+        this.bus.emit('CurrencyChanged', { id: 'BR', total: this.wallet.get('BR') });
+        if (r.result.outcome === 'viral') this.bumpStreak();
+        else if (r.result.outcome === 'flop') this.dampStreak();
+        this.bus.emit('CommentResolved', { phoneId: r.phoneId, result: r.result });
+        this.reactions.splice(i, 1);
       }
     }
   }
@@ -189,12 +259,6 @@ export class Game implements Tickable {
 
   private credit(id: CurrencyId, amount: BigNumber): void {
     this.wallet.add(id, amount);
-    this.bus.emit('CurrencyChanged', { id, total: this.wallet.get(id) });
-  }
-
-  private debit(id: CurrencyId, amount: BigNumber): void {
-    const actual = BigNumber.min(this.wallet.get(id), amount);
-    this.wallet.spend(id, actual);
     this.bus.emit('CurrencyChanged', { id, total: this.wallet.get(id) });
   }
 

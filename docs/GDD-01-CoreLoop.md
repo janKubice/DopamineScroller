@@ -49,10 +49,22 @@ aktivní hry a později se naráží na **Pozornost** (M1, viz `GDD-02`).
 1. Hráč na postu ve stavu `Ready` zvolí **Komentovat**.
 2. Hra nabídne **3 náhodné komentáře** vylosované z datové sady (`comments.json`, cílově ~100 typů).
 3. Hráč jeden vybere a „postne" ho.
-4. Komentář začne v reálném čase sbírat **liky a disliky** — animované reakce „skáčou"
-   k příspěvku po dobu `reactionWindow` (≈ 2–4 s).
+4. Komentář začne v reálném čase sbírat **liky a disliky** — reakce „naskakují"
+   k příspěvku postupně po dobu `reactionWindow` (≈ 4 s), **ne najednou**.
 5. **Výsledné net-liky** určí odměnu v **Dopaminu** (+ Comment měna). Smůla = převaha disliků
    = malá odměna, případně drobná penalizace (nalomení streaku / kapka Brain Rotu).
+
+**Pravidla & implementace (důležité):**
+
+- **Jen jednou na post:** Like i Komentář lze na jeden načtený post dát **pouze jednou**
+  (jako na reálné síti). UI po akci tlačítko obarví a deaktivuje; reset přijde s novým postem.
+- **Opožděný outcome:** Hráč se výsledek (`viral`/`ok`/`flop`) **nedozví hned**. Komentář
+  se odešle, reakce naskakují v čase a teprve na konci okna „vyskočí" notifikace s výsledkem.
+  Dopamin/Brain Rot se připisují **průběžně**, jak liky naskakují. Reakce běží **nezávisle**
+  na telefonu — můžeš mezitím dál scrollovat, liky na tvém komentáři dál přibývají.
+- **Doménové eventy:** `CommentPosted` (odesláno) → opakovaně `CommentReaction`
+  (`{kind: 'like'|'dislike'}`, jeden naskočený lajk/dislajk) → `CommentResolved`
+  (`{result}`, finální outcome). Logika streamování žije v `Game.advanceReactions`.
 
 ### 4.2 Datový model komentáře (`comments.json`)
 
