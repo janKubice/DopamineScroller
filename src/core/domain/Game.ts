@@ -3,6 +3,7 @@ import { Wallet } from '../economy/Wallet';
 import { UpgradeStore } from '../economy/UpgradeStore';
 import { bufferScale, bandwidthLoad } from '../economy/Bandwidth';
 import type { CurrencyId } from '../economy/currencies';
+import { SAVE_VERSION, type SaveState } from '../persistence/SaveData';
 import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
@@ -39,6 +40,14 @@ export interface GameEvents extends EventMap {
   UpgradePurchased: { id: string; level: number };
 }
 
+/** Výsledek offline těžby (po načtení hry). */
+export interface OfflineEarnings {
+  seconds: number; // skutečně započtené sekundy (po zastropování)
+  capped: boolean; // true pokud byla doba zastropována
+  dopamine: BigNumber;
+  likes: BigNumber;
+}
+
 /** View model jednoho upgradu pro prezentaci. */
 export interface UpgradeView {
   id: string;
@@ -60,6 +69,8 @@ const STREAK_DECAY = 0.2; // za sekundu
 const BASE_POST_VALUE = BigNumber.of(1); // Text-It: nízký base Dopamin
 const BASE_BANDWIDTH = 3; // Mbps – domácí Wi-Fi na startu
 const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
+const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
+const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
 
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
@@ -159,9 +170,31 @@ export class Game implements Tickable {
     return total;
   }
 
-  /** Aktuální spotřeba sítě (Mbps): každý telefon něco žere (boti přijdou ve Fázi 4). */
+  /** Aktuální spotřeba sítě (Mbps): telefony + boti. */
   get bandwidthConsumption(): number {
-    return this.phones.length * PHONE_BANDWIDTH_COST;
+    let c = this.phones.length * PHONE_BANDWIDTH_COST;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === 'passiveDopamine' || def.effect.type === 'passiveLikes') {
+        c += BOT_BANDWIDTH_COST * this.upgrades.level(def.id);
+      }
+    }
+    return c;
+  }
+
+  /** Pasivní Dopamin/s z botů (auto-scroller). Násoben algoritmy i penalizací sítě. */
+  get passiveDopamineRate(): BigNumber {
+    const base = this.sumEffect('passiveDopamine');
+    if (base === 0) return BigNumber.ZERO;
+    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
+    return BigNumber.of(base).mul(this.productionMultiplier).mul(BigNumber.of(scale));
+  }
+
+  /** Pasivní Likes/s z botů (auto-liker). Násobeno penalizací sítě. */
+  get passiveLikesRate(): BigNumber {
+    const base = this.sumEffect('passiveLikes');
+    if (base === 0) return BigNumber.ZERO;
+    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
+    return BigNumber.of(base).mul(BigNumber.of(scale));
   }
 
   /** Zatížení sítě (spotřeba / kapacita). > 1 = přetížení. */
@@ -284,6 +317,49 @@ export class Game implements Tickable {
     });
   }
 
+  // ── Persistence & offline ───────────────────────────────────────────────────
+
+  serialize(): SaveState {
+    return {
+      version: SAVE_VERSION,
+      rng: this.rng.serialize(),
+      wallet: this.wallet.serialize(),
+      upgrades: this.upgrades.serialize(),
+      streak: this.streakValue,
+      virality: this.virality,
+      phoneCount: this.phones.length,
+    };
+  }
+
+  /** Načte uložený stav (přepíše aktuální). Telefony se obnoví v počtu, ale v bufferingu. */
+  loadSave(data: SaveState): void {
+    this.rng.restore(data.rng);
+    this.wallet.load(data.wallet);
+    this.upgrades.loadLevels(data.upgrades);
+    this.streakValue = data.streak;
+    this.virality = data.virality;
+    this.reactions.length = 0;
+    this.pendingComments.clear();
+    this.phones.length = 0;
+    this.nextPhoneId = 1;
+    const count = Math.max(1, Math.floor(data.phoneCount));
+    for (let i = 0; i < count; i++) this.addPhone();
+  }
+
+  /**
+   * Spočítá a připíše offline těžbu za `seconds` (zastropováno na MAX_OFFLINE_SECONDS).
+   * Předpokládá ustálený stav (rate × čas) – standardní idle aproximace.
+   */
+  computeOfflineEarnings(seconds: number): OfflineEarnings {
+    const capped = Math.max(0, Math.min(seconds, MAX_OFFLINE_SECONDS));
+    const t = BigNumber.of(capped);
+    const dopamine = this.passiveDopamineRate.mul(t);
+    const likes = this.passiveLikesRate.mul(t);
+    if (dopamine.isPositive()) this.credit('DOP', dopamine);
+    if (likes.isPositive()) this.credit('LIK', likes);
+    return { seconds: capped, capped: seconds > MAX_OFFLINE_SECONDS, dopamine, likes };
+  }
+
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
 
   advance(dt: number): void {
@@ -297,6 +373,15 @@ export class Game implements Tickable {
       }
     }
     this.advanceReactions(dt);
+    this.advancePassive(dt);
+  }
+
+  /** Pasivní příjem z botů (čte se přímo, HUD si HUD aktualizuje sám). */
+  private advancePassive(dt: number): void {
+    const dop = this.passiveDopamineRate;
+    if (dop.isPositive()) this.wallet.add('DOP', dop.mul(BigNumber.of(dt)));
+    const lik = this.passiveLikesRate;
+    if (lik.isPositive()) this.wallet.add('LIK', lik.mul(BigNumber.of(dt)));
   }
 
   /** Postupné „naskakování" reakcí na komentáře a průběžné připisování odměn. */
@@ -356,7 +441,20 @@ export class Game implements Tickable {
       case 'bandwidth':
         // čte se dynamicky v totalBandwidth – žádná akce není potřeba.
         break;
+      case 'passiveDopamine':
+      case 'passiveLikes':
+        // čtou se dynamicky v passive*Rate – žádná akce není potřeba.
+        break;
     }
+  }
+
+  /** Součet hodnot daného typu efektu napříč koupenými upgrady (value × level). */
+  private sumEffect(type: UpgradeDef['effect']['type']): number {
+    let sum = 0;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === type) sum += def.effect.value * this.upgrades.level(def.id);
+    }
+    return sum;
   }
 
   private generatePost(): Post {

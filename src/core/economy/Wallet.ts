@@ -33,6 +33,14 @@ export class Wallet {
     return true;
   }
 
+  /** Nahradí všechny zůstatky uloženými hodnotami (pro načtení hry). */
+  load(data: Record<string, { m: number; e: number }>): void {
+    this.balances.clear();
+    for (const [id, value] of Object.entries(data)) {
+      this.balances.set(id as CurrencyId, BigNumber.deserialize(value));
+    }
+  }
+
   serialize(): Record<string, { m: number; e: number }> {
     const out: Record<string, { m: number; e: number }> = {};
     for (const [id, value] of this.balances) {

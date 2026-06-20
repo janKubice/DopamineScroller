@@ -5,10 +5,23 @@
  * Commands, subscribe to events.
  */
 import './style.css';
-import { Game } from './core/domain/Game';
+import { Game, type OfflineEarnings } from './core/domain/Game';
 import { CURRENCIES, type CurrencyId } from './core/economy/currencies';
+import { SaveManager } from './persistence/SaveManager';
 
 const game = new Game({ seed: Date.now() & 0xffff });
+
+// Persistence: načti uložený stav PŘED navázáním UI, ať reference telefonu i lišta sedí.
+const saver = new SaveManager();
+let offlineResult: OfflineEarnings | null = null;
+const loaded = saver.load();
+if (loaded) {
+  game.loadSave(loaded.state);
+  const seconds = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
+  const earned = game.computeOfflineEarnings(seconds);
+  if (earned.dopamine.isPositive() || earned.likes.isPositive()) offlineResult = earned;
+}
+
 const phone = game.phones[0]!;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -53,8 +66,11 @@ function renderHud(): void {
     (id) => `<span class="hud__item">${CURRENCIES[id].symbol} ${game.wallet.get(id).format()}</span>`,
   ).join('');
   const overload = game.isOverloaded;
+  const dps = game.passiveDopamineRate;
+  const rate = dps.isPositive() ? `<span class="hud__item hud__rate">+${dps.format()}/s 🧠</span>` : '';
   hud.innerHTML =
     money +
+    rate +
     `<span class="hud__item">📱 ${game.phones.length}</span>` +
     `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
     `📶 ${game.bandwidthConsumption}/${game.totalBandwidth}${overload ? ' ⚠️' : ''}</span>` +
@@ -183,7 +199,27 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
+function showOfflineToast(e: OfflineEarnings): void {
+  const parts: string[] = [];
+  if (e.dopamine.isPositive()) parts.push(`+${e.dopamine.format()} 🧠`);
+  if (e.likes.isPositive()) parts.push(`+${e.likes.format()} 👍`);
+  pushNote(`💤 While away (${formatDuration(e.seconds)}): ${parts.join(' · ')}`, 'note--offline', 7000);
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${Math.floor(seconds)}s`;
+}
+
 buildUpgrades();
+
+// Offline earnings toast + autosave to localStorage.
+if (offlineResult) showOfflineToast(offlineResult);
+saver.startAutosave(() => game.serialize(), 5000);
+window.addEventListener('beforeunload', () => saver.save(game.serialize()));
 
 // Game loop: presentation measures real time, GameClock steps the domain at a fixed rate.
 let last = performance.now();

@@ -9,7 +9,9 @@ import type { CurrencyId } from '../economy/currencies';
 export type UpgradeEffectType =
   | 'addPhone' // přidá telefon(y)
   | 'dopamineMultiplier' // násobí globální produkci Dopaminu
-  | 'bandwidth'; // zvýší kapacitu sítě (Mbps)
+  | 'bandwidth' // zvýší kapacitu sítě (Mbps)
+  | 'passiveDopamine' // bot: pasivní Dopamin/s (těží i offline)
+  | 'passiveLikes'; // bot: pasivní Likes/s
 
 export interface UpgradeDef {
   readonly id: string;
@@ -87,5 +89,21 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '🛜',
     cost: { currency: 'DOP', base: 10000, multiplier: 1.4 },
     effect: { type: 'bandwidth', value: 100 },
+  },
+  {
+    id: 'auto_liker',
+    name: 'Auto-Liker Bot',
+    description: '+1 Like/s automatically. Uses bandwidth.',
+    icon: '👆',
+    cost: { currency: 'DOP', base: 150, multiplier: 1.25 },
+    effect: { type: 'passiveLikes', value: 1 },
+  },
+  {
+    id: 'auto_scroller',
+    name: 'Auto-Scroller Bot',
+    description: '+0.5 Dopamine/s automatically — mines even offline. Uses bandwidth.',
+    icon: '🤖',
+    cost: { currency: 'DOP', base: 200, multiplier: 1.25 },
+    effect: { type: 'passiveDopamine', value: 0.5 },
   },
 ];

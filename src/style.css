@@ -63,6 +63,12 @@ body {
   color: #d9480f;
 }
 
+.hud__rate {
+  color: #1d7a34;
+  font-size: 16px;
+  align-self: center;
+}
+
 .hud__overload {
   color: #c92a2a;
   animation: pulse 1s ease-in-out infinite;
@@ -239,6 +245,12 @@ body {
   background: #fffbe6;
   border-color: #ffe58f;
   color: #ad8b00;
+}
+.note--offline {
+  font-size: 15px;
+  background: #eef6ff;
+  border-color: #a5c8ff;
+  color: #1e4ba0;
 }
 
 @keyframes pop {

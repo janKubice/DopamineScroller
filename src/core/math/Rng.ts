@@ -78,9 +78,14 @@ export class Rng {
     return { state: this.state };
   }
 
+  /** Obnoví vnitřní stav (pro načtení uložené hry). */
+  restore(data: { state: number }): void {
+    this.state = data.state >>> 0;
+  }
+
   static deserialize(data: { state: number }): Rng {
     const rng = new Rng(0);
-    rng.state = data.state >>> 0;
+    rng.restore(data);
     return rng;
   }
 }

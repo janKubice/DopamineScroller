@@ -73,15 +73,22 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 (`addPhone` | `dopamineMultiplier`). Ceny a úrovně spravuje `UpgradeStore`, nákup
 (včetně **hromadného ×10**) a aplikaci efektů řeší `Game.buy`. Startovní sada:
 
-| id | Název | Měna · base · mult | Efekt |
-|---|---|---|---|
-| `secondhand_phone` | Secondhand Smartphone | DOP · 100 · 1.15 | +1 telefon (neomezeně) |
-| `clickbait` | Clickbait Optimizer | DOP · 50 · 1.2 | ×1.1 Dopamin / úroveň |
-| `echo_chamber` | Echo Chamber | DOP · 500 · — | ×1.5 Dopamin (max 1) |
-| `kitten_boost` | Kitten Video Boost | DOP · 2500 · — | ×2 Dopamin (max 1) |
+| id | Název | Měna · base · mult | Efekt | Fáze |
+|---|---|---|---|---|
+| `secondhand_phone` | Secondhand Smartphone | DOP · 100 · 1.15 | +1 telefon (neomezeně) | F2 |
+| `clickbait` | Clickbait Optimizer | DOP · 50 · 1.2 | ×1.1 Dopamin / úroveň | F2 |
+| `echo_chamber` | Echo Chamber | DOP · 500 · — | ×1.5 Dopamin (max 1) | F2 |
+| `kitten_boost` | Kitten Video Boost | DOP · 2500 · — | ×2 Dopamin (max 1) | F2 |
+| `stolen_wifi` | Stolen Neighbor's Wi-Fi | DOP · 80 · 1.3 | +2 Mbps | F3 |
+| `adsl` | Old ADSL Modem | DOP · 800 · 1.3 | +10 Mbps | F3 |
+| `fiber` | Fiber Optics | DOP · 10000 · 1.4 | +100 Mbps | F3 |
+| `auto_liker` | Auto-Liker Bot | DOP · 150 · 1.25 | +1 Like/s (žere síť) | F4 |
+| `auto_scroller` | Auto-Scroller Bot | DOP · 200 · 1.25 | +0.5 Dopamin/s, **těží i offline** (žere síť) | F4 |
 
 > Algoritmy se skládají **multiplikativně** do `Game.productionMultiplier`, který spolu se
-> Streakem tvoří globální multiplikátor swipe Dopaminu. Balanc konstanty → JSON ve Fázi 9.
+> Streakem tvoří globální multiplikátor swipe Dopaminu. Boti dávají pasivní příjem
+> (`passiveDopamine`/`passiveLikes`), který je násoben penalizací sítě (přetížení zpomalí
+> i těžbu) a u Dopaminu i algoritmy. Balanc konstanty → JSON ve Fázi 9.
 
 ## 4. Temná větev: Brain Rot
 

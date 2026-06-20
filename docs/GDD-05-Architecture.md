@@ -64,12 +64,16 @@ Implementace: `src/core/events/EventBus.ts`.
 UI nepíše do stavu přímo — volá metody `Game` (Commands): `buyPhone()`, `swipe(phoneId)`,
 `postComment(phoneId, commentId)`, `allocateBandwidth(...)`. Doména validuje a emituje eventy.
 
-## 6. Save / Load & perzistence
-- Stav je serializovatelný do JSON (`localStorage`, funguje i na itch.io v iframe).
-- **Verzování** save + migrace (`saveVersion`).
-- Save obsahuje RNG seed pro reprodukovatelnost.
-- Offline zisk: při loadu se vezme `now - lastSaved` a zavolá `clock.advance(delta)`.
-- Implementace: Fáze 7.
+## 6. Save / Load & perzistence  ✅ (implementováno, předtaženo z F7)
+- Doména je čistá: `Game.serialize()` → `SaveState` (verze, RNG stav, peněženka, úrovně
+  upgradů, streak, virality, počet telefonů), `Game.loadSave()` ho obnoví. Přechodný stav
+  telefonů (post, časovače, reakce) se resetuje do bufferingu.
+- `SaveManager` (`src/persistence/`, mimo doménu) řeší **localStorage** + časové razítko +
+  **autosave** (5 s) + uložení na `beforeunload`. Funguje i v itch.io iframe.
+- **Verzování** (`SAVE_VERSION`); při neshodě verze se save ignoruje (migrace = TODO).
+- **Offline těžba:** `Game.computeOfflineEarnings(seconds)` připíše `pasivní rate × čas`
+  (closed-form, zastropováno na 8 h). Pasivní rate dávají boti (auto-scroller/auto-liker),
+  je násoben penalizací sítě i algoritmy. SaveManager dodá `now - savedAt`.
 
 ## 7. Data-driven obsah
 Obsah (komentáře, posty, upgrady, platformy) žije v **datech** (`src/core/content/*.json`),
