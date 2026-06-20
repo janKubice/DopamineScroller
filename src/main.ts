@@ -52,9 +52,12 @@ function renderHud(): void {
   const money = HUD_ORDER.map(
     (id) => `<span class="hud__item">${CURRENCIES[id].symbol} ${game.wallet.get(id).format()}</span>`,
   ).join('');
+  const overload = game.isOverloaded;
   hud.innerHTML =
     money +
     `<span class="hud__item">📱 ${game.phones.length}</span>` +
+    `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
+    `📶 ${game.bandwidthConsumption}/${game.totalBandwidth}${overload ? ' ⚠️' : ''}</span>` +
     `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
 }
 

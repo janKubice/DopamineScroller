@@ -8,7 +8,8 @@ import type { CurrencyId } from '../economy/currencies';
  */
 export type UpgradeEffectType =
   | 'addPhone' // přidá telefon(y)
-  | 'dopamineMultiplier'; // násobí globální produkci Dopaminu
+  | 'dopamineMultiplier' // násobí globální produkci Dopaminu
+  | 'bandwidth'; // zvýší kapacitu sítě (Mbps)
 
 export interface UpgradeDef {
   readonly id: string;
@@ -62,5 +63,29 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 2500, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 2 },
+  },
+  {
+    id: 'stolen_wifi',
+    name: "Stolen Neighbor's Wi-Fi",
+    description: '+2 Mbps of bandwidth.',
+    icon: '📡',
+    cost: { currency: 'DOP', base: 80, multiplier: 1.3 },
+    effect: { type: 'bandwidth', value: 2 },
+  },
+  {
+    id: 'adsl',
+    name: 'Old ADSL Modem',
+    description: '+10 Mbps of bandwidth.',
+    icon: '☎️',
+    cost: { currency: 'DOP', base: 800, multiplier: 1.3 },
+    effect: { type: 'bandwidth', value: 10 },
+  },
+  {
+    id: 'fiber',
+    name: 'Fiber Optics',
+    description: '+100 Mbps of bandwidth.',
+    icon: '🛜',
+    cost: { currency: 'DOP', base: 10000, multiplier: 1.4 },
+    effect: { type: 'bandwidth', value: 100 },
   },
 ];

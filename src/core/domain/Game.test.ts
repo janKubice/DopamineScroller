@@ -167,3 +167,40 @@ describe('Game — upgrady', () => {
     expect((event as unknown as { id: string }).id).toBe('secondhand_phone');
   });
 });
+
+describe('Game — bandwidth', () => {
+  it('základní kapacita a spotřeba', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.totalBandwidth).toBe(3);
+    expect(game.bandwidthConsumption).toBe(1); // 1 telefon
+    expect(game.isOverloaded).toBe(false);
+  });
+
+  it('další telefony zvyšují spotřebu a můžou přetížit síť', () => {
+    const game = new Game({ seed: 1 });
+    for (let i = 0; i < 5; i++) game.addPhone(); // 6 telefonů / kapacita 3
+    expect(game.bandwidthConsumption).toBe(6);
+    expect(game.isOverloaded).toBe(true);
+  });
+
+  it('síťový upgrade zvýší kapacitu a sníží zatížení', () => {
+    const game = new Game({ seed: 1 });
+    for (let i = 0; i < 5; i++) game.addPhone();
+    const loadBefore = game.bandwidthLoad;
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    expect(game.buy('fiber', 1)).toBe(1); // +100 Mbps
+    expect(game.totalBandwidth).toBe(103);
+    expect(game.bandwidthLoad).toBeLessThan(loadBefore);
+    expect(game.isOverloaded).toBe(false);
+  });
+
+  it('přetížení zpomaluje buffering', () => {
+    const game = new Game({ seed: 1 });
+    for (let i = 0; i < 10; i++) game.addPhone(); // 11 telefonů / 3 Mbps = velké přetížení
+    expect(game.isOverloaded).toBe(true);
+    const p = game.phones[0]!;
+    expect(p.state).toBe('buffering');
+    game.advance(p.config.bufferTime); // normálně ready, ale přetíženo -> ne
+    expect(p.isReady).toBe(false);
+  });
+});

@@ -9,7 +9,7 @@ kdy je doména hotová a otestovaná.
 | **F0 — Základy** | „Běží tick a testy" | Vite+TS+Vitest, **BigNumber**, seedovaný **RNG**, **EventBus**, **GameClock** (offline-ready), kostra GameState | ✅ |
 | **F1 — Core Loop** | „Scrolluju 1 telefon, Dopamin roste" | **Phone FSM**, měna Dopamin, **Wallet**, **CostCurve**, **Komentářová ruleta** (opožděné reakce), 1 platforma (Text-It), **Streak (M3)**, dev DOM harness | ✅ |
 | **F2 — Ekonomika & Upgrady** | „Kupuju, čísla rostou exponenciálně" | **UpgradeStore** (generický Purchasable) + **hromadný nákup**, hardware (další telefony), algoritmy (**dopamineMultiplier**), spodní lišta upgradů | ✅ |
-| **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, penalizační křivka, network upgrady, **QoS alokace (M5)** | ⬜ |
+| **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, **penalizační křivka** (exp. zpomalení), network upgrady (📡☎️🛜). QoS alokace (M5) → odloženo | ✅ |
 | **F4 — Automatizace** | „Hra se hraje sama" | Boti (Auto-Liker/Commenter/Scroller) jako tick-aktoři, jejich Bandwidth náklad, **Pozornost (M1)**, streak bot-floor | ⬜ |
 | **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | Progrese platforem (+nové sítě C1), **Virality → Hidden Gems**, **Brain Rot** větev (C2), **Synergie (M2)**, content provider (~100 obrázků + text), rozšíření komentářů na ~100 | ⬜ |
 | **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, Zen shop, perzistence Clarity | ⬜ |
@@ -37,4 +37,5 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
 - ✅ **F0 hotová** — `src/core/{math,time,events}`.
 - ✅ **F1 hotová** — Phone FSM, Wallet, CostCurve, CommentPool (opožděné reakce), Streak, dev harness.
 - ✅ **F2 hotová** — UpgradeStore + hromadný nákup, hardware, algoritmy (multiplikátory), spodní lišta.
-- ⬜ **F3 další** — Bandwidth bottleneck.
+- ✅ **F3 hotová** — Bandwidth bottleneck (kapacita vs. spotřeba, exp. penalizace, síťové upgrady).
+- ⬜ **F4 další** — Automatizace (boti) + Pozornost (M1).

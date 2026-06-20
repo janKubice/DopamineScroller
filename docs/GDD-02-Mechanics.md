@@ -54,6 +54,12 @@ bufferTime_effective = bufferTime_base × factor
 
 20 telefonů na slabém routeru = nekonečné načítání a zisk se zastaví. Hráč musí balancovat.
 
+> **Implementováno (Fáze 3):** čisté funkce v `src/core/economy/Bandwidth.ts`
+> (`bandwidthLoad`, `bufferScale`, `OVERLOAD_EXPONENT = 2`). `Game` počítá `totalBandwidth`
+> (BASE 3 Mbps + síťové upgrady) a `bandwidthConsumption` (1 Mbps/telefon), výsledný
+> `bufferScale` předává do `Phone.advance`. Síťové upgrady: 📡 Stolen Wi-Fi (+2),
+> ☎️ ADSL (+10), 🛜 Fiber (+100). Boti do spotřeby přibydou ve Fázi 4.
+
 ### 3.1 (M5) Bandwidth QoS — alokace propustnosti
 Mid-game **Network Manager** umožní **prioritizovat** propustnost konkrétním telefonům
 (váhy per telefon). Default = rovnoměrné rozdělení (žádná mikro-správa pro casual hráče);

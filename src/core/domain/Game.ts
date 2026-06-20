@@ -1,6 +1,7 @@
 import { EventBus, type EventMap } from '../events/EventBus';
 import { Wallet } from '../economy/Wallet';
 import { UpgradeStore } from '../economy/UpgradeStore';
+import { bufferScale, bandwidthLoad } from '../economy/Bandwidth';
 import type { CurrencyId } from '../economy/currencies';
 import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
@@ -57,6 +58,8 @@ const STREAK_MAX = 3;
 const STREAK_STEP = 0.1;
 const STREAK_DECAY = 0.2; // za sekundu
 const BASE_POST_VALUE = BigNumber.of(1); // Text-It: nízký base Dopamin
+const BASE_BANDWIDTH = 3; // Mbps – domácí Wi-Fi na startu
+const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
 
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
@@ -143,6 +146,31 @@ export class Game implements Tickable {
       }
     }
     return mult;
+  }
+
+  /** Celková kapacita sítě (Mbps): základ + síťové upgrady. */
+  get totalBandwidth(): number {
+    let total = BASE_BANDWIDTH;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === 'bandwidth') {
+        total += def.effect.value * this.upgrades.level(def.id);
+      }
+    }
+    return total;
+  }
+
+  /** Aktuální spotřeba sítě (Mbps): každý telefon něco žere (boti přijdou ve Fázi 4). */
+  get bandwidthConsumption(): number {
+    return this.phones.length * PHONE_BANDWIDTH_COST;
+  }
+
+  /** Zatížení sítě (spotřeba / kapacita). > 1 = přetížení. */
+  get bandwidthLoad(): number {
+    return bandwidthLoad(this.bandwidthConsumption, this.totalBandwidth);
+  }
+
+  get isOverloaded(): boolean {
+    return this.bandwidthLoad > 1;
   }
 
   // ── Commands (Prezentace → Doména) ──────────────────────────────────────────
@@ -260,8 +288,10 @@ export class Game implements Tickable {
 
   advance(dt: number): void {
     this.setStreak(Math.max(STREAK_FLOOR, this.streakValue - STREAK_DECAY * dt));
+    // Přetížení sítě zpomalí buffering všech telefonů stejně.
+    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
     for (const phone of this.phones) {
-      const tick = phone.advance(dt);
+      const tick = phone.advance(dt, scale);
       if (tick?.type === 'ready') {
         this.bus.emit('PostReady', { phoneId: phone.id, rarity: tick.rarity });
       }
@@ -322,6 +352,9 @@ export class Game implements Tickable {
         break;
       case 'dopamineMultiplier':
         // čte se dynamicky v productionMultiplier – žádná akce není potřeba.
+        break;
+      case 'bandwidth':
+        // čte se dynamicky v totalBandwidth – žádná akce není potřeba.
         break;
     }
   }

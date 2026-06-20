@@ -63,6 +63,17 @@ body {
   color: #d9480f;
 }
 
+.hud__overload {
+  color: #c92a2a;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* ── Stage / phone ── */
 .stage {
   flex: 1;

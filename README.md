@@ -64,4 +64,5 @@ index.html             # vstupní bod HTML5
   Komentářová ruleta (opožděné reakce), Streak, dev harness.
 - ✅ **Fáze 2 — Ekonomika & Upgrady:** UpgradeStore + hromadný nákup, další telefony,
   algoritmy (multiplikátory), spodní lišta upgradů.
-- ⬜ Fáze 3+ (Bandwidth bottleneck) — viz roadmapa.
+- ✅ **Fáze 3 — Bandwidth:** kapacita vs. spotřeba, exp. penalizace bufferingu, síťové upgrady.
+- ⬜ Fáze 4+ (Automatizace / boti + Pozornost) — viz roadmapa.
