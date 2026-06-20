@@ -228,23 +228,50 @@ describe('Game — save/load', () => {
   });
 });
 
-describe('Game — pasivní příjem & offline', () => {
-  it('bez botů není pasivní příjem', () => {
+describe('Game — boti & offline', () => {
+  it('bez botů žádný odhad ani příjem v čase', () => {
     const game = new Game({ seed: 1 });
-    expect(game.passiveDopamineRate.isZero()).toBe(true);
+    expect(game.estimatedDopaminePerSecond.isZero()).toBe(true);
     const before = game.wallet.get('DOP').toNumber();
-    game.advance(10);
+    for (let i = 0; i < 100; i++) game.advance(0.1); // 10 s, posty se načtou ale nikdo neswipuje
     expect(game.wallet.get('DOP').toNumber()).toBe(before);
   });
 
-  it('auto-scroller generuje pasivní Dopamin v čase', () => {
+  it('auto-scroller swipuje telefony a generuje Dopamin', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(1e6));
     game.buy('auto_scroller', 1);
-    expect(game.passiveDopamineRate.isPositive()).toBe(true);
+    expect(game.estimatedDopaminePerSecond.isPositive()).toBe(true);
     const before = game.wallet.get('DOP').toNumber();
-    game.advance(10);
+    for (let i = 0; i < 200; i++) game.advance(0.1); // 20 s
     expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before);
+  });
+
+  it('auto-liker lajkuje načtené posty', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_liker', 1);
+    for (let i = 0; i < 100; i++) game.advance(0.1);
+    expect(game.wallet.get('LIK').toNumber()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('auto-commenter komentuje načtené posty', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_commenter', 1);
+    for (let i = 0; i < 100; i++) game.advance(0.1);
+    expect(game.wallet.get('COM').toNumber()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('slabý auto-scroller nestíhá hodně telefonů (posty se hromadí)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e7));
+    game.buy('auto_scroller', 1); // jen 0.5 swipu/s
+    game.buy('fiber', 1); // dost sítě, ať není přetížení důvod
+    for (let i = 0; i < 20; i++) game.addPhone(); // 21 telefonů
+    for (let i = 0; i < 300; i++) game.advance(0.1); // 30 s
+    const ready = game.phones.filter((p) => p.isReady).length;
+    expect(ready).toBeGreaterThan(0); // nestíhá -> část postů čeká
   });
 
   it('boti zvyšují spotřebu sítě', () => {
@@ -255,16 +282,25 @@ describe('Game — pasivní příjem & offline', () => {
     expect(game.bandwidthConsumption).toBeGreaterThan(base);
   });
 
-  it('offline připíše příjem podle ratu', () => {
+  it('offline připíše Dopamin podle propustnosti botů', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(1e6));
     game.buy('auto_scroller', 2);
-    const rate = game.passiveDopamineRate.toNumber();
+    const est = game.estimatedDopaminePerSecond.toNumber();
+    expect(est).toBeGreaterThan(0);
     const before = game.wallet.get('DOP').toNumber();
     const earn = game.computeOfflineEarnings(3600);
     expect(earn.seconds).toBe(3600);
-    expect(earn.dopamine.toNumber()).toBeCloseTo(rate * 3600, 0);
-    expect(game.wallet.get('DOP').toNumber()).toBeCloseTo(before + rate * 3600, 0);
+    expect(earn.dopamine.toNumber() / (est * 3600)).toBeCloseTo(1, 5);
+    expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before);
+  });
+
+  it('offline bez auto-scrolleru je nulové', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_liker', 1); // jen liker, žádný swiper -> žádné cykly
+    const earn = game.computeOfflineEarnings(3600);
+    expect(earn.dopamine.isZero()).toBe(true);
   });
 
   it('offline je zastropované na 8 h', () => {

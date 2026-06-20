@@ -11,8 +11,9 @@ export type UpgradeEffectType =
   | 'addPhone' // přidá telefon(y)
   | 'dopamineMultiplier' // násobí globální produkci Dopaminu
   | 'bandwidth' // zvýší kapacitu sítě (Mbps)
-  | 'passiveDopamine' // bot: pasivní Dopamin/s (těží i offline)
-  | 'passiveLikes' // bot: pasivní Likes/s
+  | 'autoLikeRate' // bot: lajků/s (lajkuje načtené posty)
+  | 'autoSwipeRate' // bot: swipů/s (auto-scroller – swipe po prodlevě)
+  | 'autoCommentRate' // bot: komentářů/s (auto-commenter)
   | 'bubbleUnlock' // odemkne minihru s bublinami
   | 'bubbleValueMult' // násobí hodnotu bublin
   | 'bubbleRate'; // zvyšuje frekvenci bublin
@@ -66,10 +67,10 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     id: 'finger_warmup',
     name: 'Finger Warm-Up',
-    description: '+0.1 Dopamine/s. A humble auto-tapper.',
+    description: 'A humble auto-tapper: auto-swipes +0.2 posts/s. Uses bandwidth.',
     icon: '🤏',
     cost: { currency: 'DOP', base: 35, multiplier: 1.3 },
-    effect: { type: 'passiveDopamine', value: 0.1 },
+    effect: { type: 'autoSwipeRate', value: 0.2 },
   },
   {
     id: 'clickbait',
@@ -124,18 +125,26 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     id: 'auto_liker',
     name: 'Auto-Liker Bot',
-    description: '+1 Like/s automatically. Uses bandwidth.',
+    description: 'Auto-likes ready posts: +1 like/s per level. Buy more to keep up with more phones.',
     icon: '👆',
     cost: { currency: 'DOP', base: 150, multiplier: 1.25 },
-    effect: { type: 'passiveLikes', value: 1 },
+    effect: { type: 'autoLikeRate', value: 1 },
   },
   {
     id: 'auto_scroller',
     name: 'Auto-Scroller Bot',
-    description: '+0.5 Dopamine/s automatically — mines even offline. Uses bandwidth.',
+    description: 'Auto-swipes ready posts: +0.5 swipes/s per level — mines even offline. Uses bandwidth.',
     icon: '🤖',
     cost: { currency: 'DOP', base: 200, multiplier: 1.25 },
-    effect: { type: 'passiveDopamine', value: 0.5 },
+    effect: { type: 'autoSwipeRate', value: 0.5 },
+  },
+  {
+    id: 'auto_commenter',
+    name: 'Auto-Commenter Bot',
+    description: 'Auto-posts comments: +0.3 comments/s per level. Generates Comments & reactions.',
+    icon: '🗨️',
+    cost: { currency: 'DOP', base: 350, multiplier: 1.3 },
+    effect: { type: 'autoCommentRate', value: 0.3 },
   },
   {
     id: 'bigger_hits',

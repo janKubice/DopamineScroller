@@ -65,6 +65,6 @@ index.html             # vstupní bod HTML5
 - ✅ **Fáze 2 — Ekonomika & Upgrady:** UpgradeStore + hromadný nákup, další telefony,
   algoritmy (multiplikátory), spodní lišta upgradů.
 - ✅ **Fáze 3 — Bandwidth:** kapacita vs. spotřeba, exp. penalizace bufferingu, síťové upgrady.
-- 🟡 **Fáze 4 — Automatizace:** boti (pasivní příjem) + jejich spotřeba sítě. Zbývá Pozornost (M1).
+- 🟡 **Fáze 4 — Automatizace:** boti obsluhují telefony (Auto-Liker/Scroller/Commenter, škálují s počtem telefonů) + viditelný postih přetížení sítě. Zbývá Pozornost (M1).
 - ✅ **Fáze 7 — Save & Offline (předtaženo):** localStorage save + autosave, offline těžba (cap 8 h).
 - ⬜ Dokončit F4 (Pozornost), pak F5 (platformy, Virality, Brain Rot) — viz roadmapa.

@@ -53,6 +53,8 @@ export class Phone {
   post: Post | null = null;
   liked = false;
   commented = false;
+  /** Jak dlouho (s) je post ve stavu ready — pro prodlevu auto-scrolleru. */
+  readyElapsed = 0;
 
   constructor(
     readonly id: number,
@@ -75,6 +77,7 @@ export class Phone {
           this.bufferRemaining = 0;
           this.liked = false;
           this.commented = false;
+          this.readyElapsed = 0;
           this.state = 'ready';
           return { type: 'ready', rarity: this.post.rarity };
         }
@@ -88,6 +91,7 @@ export class Phone {
         return null;
       }
       case 'ready':
+        this.readyElapsed += dt;
         return null;
     }
   }
@@ -141,5 +145,6 @@ export class Phone {
     this.post = null;
     this.liked = false;
     this.commented = false;
+    this.readyElapsed = 0;
   }
 }

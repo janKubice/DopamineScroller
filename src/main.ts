@@ -70,8 +70,8 @@ function renderHud(): void {
   const money = HUD_ORDER.map(
     (id) => `<span class="hud__item">${CURRENCIES[id].symbol} ${game.wallet.get(id).format()}</span>`,
   ).join('');
-  const dps = game.passiveDopamineRate;
-  const rate = dps.isPositive() ? `<span class="hud__item hud__rate">+${dps.format()}/s 🧠</span>` : '';
+  const dps = game.estimatedDopaminePerSecond;
+  const rate = dps.isPositive() ? `<span class="hud__item hud__rate">~${dps.format()}/s 🧠</span>` : '';
   const overload = game.isOverloaded;
   hud.innerHTML =
     money +
@@ -94,7 +94,8 @@ function syncPhones(): void {
   for (const p of game.phones) {
     let card = cards.get(p.id);
     if (!card) card = createCard(p.id);
-    const key = p.isReady ? 'ready' : p.state;
+    // klíč zahrnuje liked/commented, aby se projevily i akce botů
+    const key = p.isReady ? `ready:${p.liked ? 'L' : '-'}${p.commented ? 'C' : '-'}` : p.state;
     if (key !== card.lastKey) {
       card.lastKey = key;
       renderCard(p.id, card);
@@ -137,6 +138,15 @@ function renderCard(id: number, card: PhoneCard): void {
     card.actions
       .querySelector<HTMLButtonElement>('[data-act="swipe"]')!
       .addEventListener('click', () => game.swipe(id));
+    // odrazit už provedené akce (i od botů)
+    if (p.liked) {
+      likeBtn.classList.add('is-active');
+      likeBtn.disabled = true;
+    }
+    if (p.commented) {
+      commentBtn.classList.add('is-active');
+      commentBtn.disabled = true;
+    }
   } else {
     card.actions.innerHTML = '';
     card.screen.innerHTML =
@@ -318,6 +328,22 @@ function applyTheme(): void {
   document.documentElement.classList.toggle('dark', game.upgrades.level('dark_mode') > 0);
 }
 
+// ── FIX2: visible penalty when the network is overloaded ──
+const overloadBanner = document.createElement('div');
+overloadBanner.className = 'overload-banner';
+overloadBanner.hidden = true;
+document.body.appendChild(overloadBanner);
+
+function applyOverload(): void {
+  const over = game.isOverloaded;
+  document.documentElement.classList.toggle('overloaded', over);
+  overloadBanner.hidden = !over;
+  if (over) {
+    overloadBanner.textContent =
+      `⚠️ NETWORK OVERLOADED — buffering at ×${game.bandwidthBufferScale.toFixed(2)} speed. Buy bandwidth!`;
+  }
+}
+
 // ── Boot ──
 buildUpgrades();
 applyTheme();
@@ -334,6 +360,7 @@ function frame(now: number): void {
   syncPhones();
   refreshUpgrades();
   applyTheme();
+  applyOverload();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

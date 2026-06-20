@@ -11,6 +11,7 @@ import { UPGRADES, type UpgradeDef } from '../content/upgrades';
 import {
   Phone,
   DEFAULT_PHONE_CONFIG,
+  RARITY_MULTIPLIER,
   type Post,
   type Rarity,
   type SwipeResult,
@@ -50,6 +51,7 @@ export interface OfflineEarnings {
   capped: boolean; // true pokud byla doba zastropována
   dopamine: BigNumber;
   likes: BigNumber;
+  comments: BigNumber;
 }
 
 /** View model jednoho upgradu pro prezentaci. */
@@ -78,6 +80,8 @@ const BASE_BANDWIDTH = 3; // Mbps – domácí Wi-Fi na startu
 const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
 const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
 const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
+const AUTO_SCROLL_GRACE = 0.4; // s – jak dlouho post „dýchá" než ho auto-scroller swipne
+const MAX_BOT_BUDGET = 3; // strop nahromaděných bot-akcí (anti-hoarding při nečinnosti)
 
 // ── Minihra: dopaminové bubliny (odemyká se upgradem) ──
 const BUBBLE_MIN_INTERVAL = 8; // s mezi spawny (min, před upgrady frekvence)
@@ -90,15 +94,31 @@ const BUBBLE_MIN_REWARD = 2; // minimální odměna
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
 
+function rarityChances(virality: number): { legendary: number; epic: number; rare: number } {
+  return {
+    legendary: 0.001 * (1 + virality),
+    epic: 0.01 * (1 + virality),
+    rare: 0.05 * (1 + virality),
+  };
+}
+
 function rollRarity(virality: number, rng: Rng): Rarity {
   const r = rng.next();
-  const legendary = 0.001 * (1 + virality);
-  const epic = 0.01 * (1 + virality);
-  const rare = 0.05 * (1 + virality);
+  const { legendary, epic, rare } = rarityChances(virality);
   if (r < legendary) return 'legendary';
   if (r < legendary + epic) return 'epic';
   if (r < legendary + epic + rare) return 'rare';
   return 'common';
+}
+
+/** Očekávaný multiplikátor rarity (pro odhad pasivního/offline příjmu). */
+function expectedRarityMultiplier(virality: number): number {
+  const { legendary, epic, rare } = rarityChances(virality);
+  const common = Math.max(0, 1 - legendary - epic - rare);
+  return common * RARITY_MULTIPLIER.common +
+    rare * RARITY_MULTIPLIER.rare +
+    epic * RARITY_MULTIPLIER.epic +
+    legendary * RARITY_MULTIPLIER.legendary;
 }
 
 /** Probíhající reakce na komentář, která se vyhodnocuje postupně v čase. */
@@ -146,6 +166,9 @@ export class Game implements Tickable {
   private bubbleTimer = 0;
   private nextBubbleIn = BUBBLE_MIN_INTERVAL;
   private nextBubbleId = 1;
+  private autoLikeBudget = 0;
+  private autoSwipeBudget = 0;
+  private autoCommentBudget = 0;
   private streakValue = STREAK_FLOOR;
   private virality = 0;
   private nextPhoneId = 1;
@@ -197,31 +220,59 @@ export class Game implements Tickable {
     return total;
   }
 
-  /** Aktuální spotřeba sítě (Mbps): telefony + boti. */
+  /** Aktuální spotřeba sítě (Mbps): telefony + boti (každý bot level). */
   get bandwidthConsumption(): number {
     let c = this.phones.length * PHONE_BANDWIDTH_COST;
     for (const def of this.upgrades.all) {
-      if (def.effect.type === 'passiveDopamine' || def.effect.type === 'passiveLikes') {
+      if (
+        def.effect.type === 'autoLikeRate' ||
+        def.effect.type === 'autoSwipeRate' ||
+        def.effect.type === 'autoCommentRate'
+      ) {
         c += BOT_BANDWIDTH_COST * this.upgrades.level(def.id);
       }
     }
     return c;
   }
 
-  /** Pasivní Dopamin/s z botů (auto-scroller). Násoben algoritmy i penalizací sítě. */
-  get passiveDopamineRate(): BigNumber {
-    const base = this.sumEffect('passiveDopamine');
-    if (base === 0) return BigNumber.ZERO;
-    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
-    return BigNumber.of(base).mul(this.productionMultiplier).mul(BigNumber.of(scale));
+  /** Násobič rychlosti bufferingu dle zatížení sítě (1 = ok, < 1 = přetíženo). */
+  get bandwidthBufferScale(): number {
+    return bufferScale(this.bandwidthConsumption, this.totalBandwidth);
   }
 
-  /** Pasivní Likes/s z botů (auto-liker). Násobeno penalizací sítě. */
-  get passiveLikesRate(): BigNumber {
-    const base = this.sumEffect('passiveLikes');
-    if (base === 0) return BigNumber.ZERO;
-    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
-    return BigNumber.of(base).mul(BigNumber.of(scale));
+  /** Rychlosti botů (akcí/s) – součet úrovní upgradů. */
+  get autoLikeRate(): number {
+    return this.sumEffect('autoLikeRate');
+  }
+  get autoSwipeRate(): number {
+    return this.sumEffect('autoSwipeRate');
+  }
+  get autoCommentRate(): number {
+    return this.sumEffect('autoCommentRate');
+  }
+
+  /**
+   * Efektivní swipy/s = min(rychlost auto-scrolleru, kolik postů telefony stihnou vyrobit).
+   * Tady se projeví „čím víc telefonů, tím lepší bot je potřeba".
+   */
+  private effectiveSwipesPerSecond(): number {
+    const rate = this.autoSwipeRate;
+    if (rate <= 0 || this.phones.length === 0) return 0;
+    const bufferTime = this.phones[0]!.config.bufferTime;
+    const scale = Math.max(this.bandwidthBufferScale, 1e-6);
+    const swipeTime = this.phones[0]!.config.swipeTime;
+    const cycle = bufferTime / scale + AUTO_SCROLL_GRACE + swipeTime;
+    const supply = this.phones.length / cycle; // max postů/s, které farma vyrobí
+    return Math.min(rate, supply);
+  }
+
+  /** Odhad Dopaminu/s z botů (pro HUD). Skutečný příjem chodí přes reálné swipy. */
+  get estimatedDopaminePerSecond(): BigNumber {
+    const swipes = this.effectiveSwipesPerSecond();
+    if (swipes <= 0) return BigNumber.ZERO;
+    return BASE_POST_VALUE.mul(this.productionMultiplier)
+      .mul(BigNumber.of(expectedRarityMultiplier(this.virality)))
+      .mul(BigNumber.of(swipes));
   }
 
   /** Zatížení sítě (spotřeba / kapacita). > 1 = přetížení. */
@@ -364,8 +415,9 @@ export class Game implements Tickable {
     switch (def.effect.type) {
       case 'addPhone':
         return { delta: PHONE_BANDWIDTH_COST * def.effect.value, kind: 'uses' };
-      case 'passiveDopamine':
-      case 'passiveLikes':
+      case 'autoLikeRate':
+      case 'autoSwipeRate':
+      case 'autoCommentRate':
         return { delta: BOT_BANDWIDTH_COST, kind: 'uses' };
       case 'bandwidth':
         return { delta: def.effect.value, kind: 'adds' };
@@ -400,6 +452,9 @@ export class Game implements Tickable {
     this.bubbles.length = 0;
     this.bubbleTimer = 0;
     this.nextBubbleIn = this.rollBubbleInterval();
+    this.autoLikeBudget = 0;
+    this.autoSwipeBudget = 0;
+    this.autoCommentBudget = 0;
     this.phones.length = 0;
     this.nextPhoneId = 1;
     const count = Math.max(1, Math.floor(data.phoneCount));
@@ -412,12 +467,30 @@ export class Game implements Tickable {
    */
   computeOfflineEarnings(seconds: number): OfflineEarnings {
     const capped = Math.max(0, Math.min(seconds, MAX_OFFLINE_SECONDS));
-    const t = BigNumber.of(capped);
-    const dopamine = this.passiveDopamineRate.mul(t);
-    const likes = this.passiveLikesRate.mul(t);
+    const wasCapped = seconds > MAX_OFFLINE_SECONDS;
+    const swipesPerSec = this.effectiveSwipesPerSecond();
+    if (swipesPerSec <= 0 || capped <= 0) {
+      return {
+        seconds: capped,
+        capped: wasCapped,
+        dopamine: BigNumber.ZERO,
+        likes: BigNumber.ZERO,
+        comments: BigNumber.ZERO,
+      };
+    }
+
+    const perSwipe = BASE_POST_VALUE.mul(this.productionMultiplier).mul(
+      BigNumber.of(expectedRarityMultiplier(this.virality)),
+    );
+    const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * capped));
+    // Lajky/komentáře nemůžou překročit počet vyrobených postů.
+    const likes = this.likeYield.mul(BigNumber.of(Math.min(this.autoLikeRate, swipesPerSec) * capped));
+    const comments = BigNumber.of(Math.min(this.autoCommentRate, swipesPerSec) * capped);
+
     if (dopamine.isPositive()) this.credit('DOP', dopamine);
     if (likes.isPositive()) this.credit('LIK', likes);
-    return { seconds: capped, capped: seconds > MAX_OFFLINE_SECONDS, dopamine, likes };
+    if (comments.isPositive()) this.credit('COM', comments);
+    return { seconds: capped, capped: wasCapped, dopamine, likes, comments };
   }
 
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
@@ -425,15 +498,15 @@ export class Game implements Tickable {
   advance(dt: number): void {
     this.setStreak(Math.max(STREAK_FLOOR, this.streakValue - STREAK_DECAY * dt));
     // Přetížení sítě zpomalí buffering všech telefonů stejně.
-    const scale = bufferScale(this.bandwidthConsumption, this.totalBandwidth);
+    const scale = this.bandwidthBufferScale;
     for (const phone of this.phones) {
       const tick = phone.advance(dt, scale);
       if (tick?.type === 'ready') {
         this.bus.emit('PostReady', { phoneId: phone.id, rarity: tick.rarity });
       }
     }
+    this.processBots(dt);
     this.advanceReactions(dt);
-    this.advancePassive(dt);
     this.advanceBubbles(dt);
   }
 
@@ -498,12 +571,40 @@ export class Game implements Tickable {
     return base / rate;
   }
 
-  /** Pasivní příjem z botů (čte se přímo, HUD si HUD aktualizuje sám). */
-  private advancePassive(dt: number): void {
-    const dop = this.passiveDopamineRate;
-    if (dop.isPositive()) this.wallet.add('DOP', dop.mul(BigNumber.of(dt)));
-    const lik = this.passiveLikesRate;
-    if (lik.isPositive()) this.wallet.add('LIK', lik.mul(BigNumber.of(dt)));
+  /**
+   * Boti obsluhují telefony rychlostí danou levelem. Pořadí: nejdřív lajk, pak komentář,
+   * nakonec swipe (po prodlevě) — interakce tak proběhnou před zahozením postu. Když bot
+   * nestíhá (málo levelů na hodně telefonů), posty se zahodí nelajknuté/nezakomentované.
+   */
+  private processBots(dt: number): void {
+    this.autoLikeBudget = Math.min(MAX_BOT_BUDGET, this.autoLikeBudget + this.autoLikeRate * dt);
+    this.autoCommentBudget = Math.min(MAX_BOT_BUDGET, this.autoCommentBudget + this.autoCommentRate * dt);
+    this.autoSwipeBudget = Math.min(MAX_BOT_BUDGET, this.autoSwipeBudget + this.autoSwipeRate * dt);
+
+    while (this.autoLikeBudget >= 1) {
+      const phone = this.phones.find((p) => p.canLike);
+      if (!phone) break;
+      this.like(phone.id);
+      this.autoLikeBudget -= 1;
+    }
+    while (this.autoCommentBudget >= 1) {
+      const phone = this.phones.find((p) => p.canComment);
+      if (!phone) break;
+      this.autoCommentPhone(phone.id);
+      this.autoCommentBudget -= 1;
+    }
+    while (this.autoSwipeBudget >= 1) {
+      const phone = this.phones.find((p) => p.isReady && p.readyElapsed >= AUTO_SCROLL_GRACE);
+      if (!phone) break;
+      this.swipe(phone.id);
+      this.autoSwipeBudget -= 1;
+    }
+  }
+
+  /** Auto-commenter: vybere náhodný komentář a postne ho (vyřeší ruletu sám). */
+  private autoCommentPhone(phoneId: number): void {
+    const def = this.comments.offer(this.rng, 1)[0];
+    if (def) this.postComment(phoneId, def.id);
   }
 
   /** Postupné „naskakování" reakcí na komentáře a průběžné připisování odměn. */
@@ -563,9 +664,10 @@ export class Game implements Tickable {
       case 'bandwidth':
         // čte se dynamicky v totalBandwidth – žádná akce není potřeba.
         break;
-      case 'passiveDopamine':
-      case 'passiveLikes':
-        // čtou se dynamicky v passive*Rate – žádná akce není potřeba.
+      case 'autoLikeRate':
+      case 'autoSwipeRate':
+      case 'autoCommentRate':
+        // čtou se dynamicky v processBots – žádná akce není potřeba.
         break;
       case 'bubbleUnlock':
       case 'bubbleValueMult':

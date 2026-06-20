@@ -8,6 +8,15 @@ type AudioCtor = typeof AudioContext;
 export class SoundManager {
   private ctx: AudioContext | null = null;
   private enabled = true;
+  private readonly last: Record<string, number> = {};
+
+  /** Throttle: vrátí false, pokud daný zvuk hrál nedávno (anti-spam u botů). */
+  private gate(key: string, gapMs: number): boolean {
+    const now = performance.now();
+    if ((this.last[key] ?? 0) + gapMs > now) return false;
+    this.last[key] = now;
+    return true;
+  }
 
   constructor() {
     const resume = (): void => {
@@ -67,15 +76,15 @@ export class SoundManager {
     freqs.forEach((f, i) => window.setTimeout(() => this.blip(f, 0.18, type, peak), i * step * 1000));
   }
 
-  // ── Konkrétní zvuky ──
+  // ── Konkrétní zvuky (vysokofrekvenční mají throttle kvůli botům) ──
   like(): void {
-    this.blip(660, 0.12, 'sine', 0.07);
+    if (this.gate('like', 70)) this.blip(660, 0.12, 'sine', 0.07);
   }
   swipe(): void {
-    this.blip(300, 0.07, 'triangle', 0.05);
+    if (this.gate('swipe', 70)) this.blip(300, 0.07, 'triangle', 0.05);
   }
   comment(): void {
-    this.blip(520, 0.1, 'square', 0.04);
+    if (this.gate('comment', 90)) this.blip(520, 0.1, 'square', 0.04);
   }
   goodComment(): void {
     this.chime([523, 659, 784, 1047], 0.07, 'sine', 0.08); // veselý vzestup
@@ -93,6 +102,6 @@ export class SoundManager {
     this.chime([659, 880, 1175, 1568], 0.06, 'sine', 0.1); // třpyt
   }
   reactionTick(up: boolean): void {
-    this.blip(up ? 880 : 280, 0.04, 'sine', 0.025); // tichý cvak naskakujících liků/disliků
+    if (this.gate('tick', 55)) this.blip(up ? 880 : 280, 0.04, 'sine', 0.025); // cvak naskakujících reakcí
   }
 }

@@ -71,9 +71,11 @@ UI nepíše do stavu přímo — volá metody `Game` (Commands): `buyPhone()`, `
 - `SaveManager` (`src/persistence/`, mimo doménu) řeší **localStorage** + časové razítko +
   **autosave** (5 s) + uložení na `beforeunload`. Funguje i v itch.io iframe.
 - **Verzování** (`SAVE_VERSION`); při neshodě verze se save ignoruje (migrace = TODO).
-- **Offline těžba:** `Game.computeOfflineEarnings(seconds)` připíše `pasivní rate × čas`
-  (closed-form, zastropováno na 8 h). Pasivní rate dávají boti (auto-scroller/auto-liker),
-  je násoben penalizací sítě i algoritmy. SaveManager dodá `now - savedAt`.
+- **Offline těžba:** `Game.computeOfflineEarnings(seconds)` (closed-form, cap 8 h). Spočítá
+  `effectiveSwipesPerSecond = min(rychlost auto-scrolleru, kolik postů farma vyrobí)` — supply
+  závisí na počtu telefonů, bufferTime a penalizaci sítě. Dopamin = swipy × hodnota/swipe
+  (s očekávanou raritou × algoritmy); lajky/komentáře ≤ počet swipů. Bez auto-scrolleru = 0.
+  SaveManager dodá `now - savedAt`.
 
 ## 7. Data-driven obsah
 Obsah (komentáře, posty, upgrady, platformy) žije v **datech** (`src/core/content/*.json`),

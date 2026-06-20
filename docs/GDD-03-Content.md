@@ -82,15 +82,18 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 | `stolen_wifi` | Stolen Neighbor's Wi-Fi | DOP · 80 · 1.3 | +2 Mbps | F3 |
 | `adsl` | Old ADSL Modem | DOP · 800 · 1.3 | +10 Mbps | F3 |
 | `fiber` | Fiber Optics | DOP · 10000 · 1.4 | +100 Mbps | F3 |
-| `auto_liker` | Auto-Liker Bot | DOP · 150 · 1.25 | +1 Like/s (žere síť) | F4 |
-| `auto_scroller` | Auto-Scroller Bot | DOP · 200 · 1.25 | +0.5 Dopamin/s, **těží i offline** (žere síť) | F4 |
+| `finger_warmup` | Finger Warm-Up | DOP · 35 · 1.3 | auto-swipe +0.2 postů/s (žere síť) | F4 |
+| `auto_liker` | Auto-Liker Bot | DOP · 150 · 1.25 | auto-lajk +1 post/s (žere síť) | F4 |
+| `auto_scroller` | Auto-Scroller Bot | DOP · 200 · 1.25 | auto-swipe +0.5 postů/s, **těží i offline** | F4 |
+| `auto_commenter` | Auto-Commenter Bot | DOP · 350 · 1.3 | auto-komentář +0.3/s (COM + reakce) | F4 |
 
-> Algoritmy se skládají **multiplikativně** do `Game.productionMultiplier`, který spolu se
-> Streakem tvoří globální multiplikátor swipe Dopaminu. Boti dávají pasivní příjem
-> (`passiveDopamine`/`passiveLikes`), který je násoben penalizací sítě (přetížení zpomalí
-> i těžbu) a u Dopaminu i algoritmy. Balanc konstanty → JSON ve Fázi 9.
+> Algoritmy se skládají **multiplikativně** do `Game.productionMultiplier` (spolu se Streakem
+> = globální multiplikátor swipe Dopaminu). **Boti obsluhují reálné telefony** rychlostí dle
+> levelu (`Game.processBots`): lajk → komentář → swipe (po prodlevě `AUTO_SCROLL_GRACE`). Když
+> bot nestíhá počet telefonů, posty se hromadí nelajkané/nezahozené → tlak kupovat lepší boty.
+> Offline = closed-form swipe-cykly (`effectiveSwipesPerSecond`). Balanc konstanty → JSON (Fáze 9).
 
-> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **24 upgradů** seřazených
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **25 upgradů** seřazených
 > od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
 > kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
 > For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),

@@ -415,3 +415,34 @@ body {
 .upg__net--adds {
   color: #1d9a44;
 }
+
+/* ── FIX2: visible network overload penalty ── */
+.overload-banner {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 8px 18px;
+  border-radius: 999px;
+  background: #c92a2a;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 4px 16px rgba(201, 42, 42, 0.5);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+html.overloaded .phone {
+  border-color: #c92a2a;
+}
+
+html.overloaded .phone__screen {
+  background: color-mix(in srgb, #c92a2a 14%, var(--surface-2));
+}
+
+html.overloaded .spinner {
+  border-color: color-mix(in srgb, #c92a2a 30%, transparent);
+  border-top-color: #c92a2a;
+  animation-duration: 2.4s; /* viditelně pomalejší = „crawling" */
+}
