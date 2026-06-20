@@ -1,0 +1,38 @@
+# GDD 06 — Vývojová roadmapa
+
+**Filozofie:** domain-first, vertikální řezy. Veškerou logiku stavíme a testujeme
+**headless** dřív, než ji napojíme na DOM/WebGL. Prezentace přichází naplno až ve Fázi 8,
+kdy je doména hotová a otestovaná.
+
+| Fáze | Milník | Obsah | Stav |
+|---|---|---|---|
+| **F0 — Základy** | „Běží tick a testy" | Vite+TS+Vitest, **BigNumber**, seedovaný **RNG**, **EventBus**, **GameClock** (offline-ready), kostra GameState | ✅ |
+| **F1 — Core Loop** | „Scrolluju 1 telefon, Dopamin roste" | **Phone FSM**, měna Dopamin, **Wallet**, **CostCurve**, **Komentářová ruleta** (start), 1 platforma (Text-It), **Streak (M3)** základ, dev DOM harness | 🟡 |
+| **F2 — Ekonomika & Upgrady** | „Kupuju, čísla rostou exponenciálně" | Multi-měna (LCS), generický `Purchasable` + hromadný nákup, hardware upgrady, algoritmy (multiplikátory), formátování čísel | ⬜ |
+| **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, penalizační křivka, network upgrady, **QoS alokace (M5)** | ⬜ |
+| **F4 — Automatizace** | „Hra se hraje sama" | Boti (Auto-Liker/Commenter/Scroller) jako tick-aktoři, jejich Bandwidth náklad, **Pozornost (M1)**, streak bot-floor | ⬜ |
+| **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | Progrese platforem (+nové sítě C1), **Virality → Hidden Gems**, **Brain Rot** větev (C2), **Synergie (M2)**, content provider (~100 obrázků + text), rozšíření komentářů na ~100 | ⬜ |
+| **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, Zen shop, perzistence Clarity | ⬜ |
+| **F7 — Offline & Save** | „Zavřu a otevřu, progres zůstal" | localStorage save, verzování + migrace, **offline výpočet** (closed-form přes `clock.advance`) | ⬜ |
+| **F8 — UI & Juice** | „Vypadá to jako ta vize" | **Chaos Level (V1)** + WebGL shader overlay, **V3/V4** juice & color grading, **V2** dark patterns, audio, fixace rendereru (Pixi.js / raw WebGL) | ⬜ |
+| **F9 — Polish & Balance** | „Hratelná satira" | Zbývající **minihry (M4)**: CAPTCHA, Skip-Ad, Outrage; balanc (konstanty jako data), achievementy, **Doomscroll Wrapped (C5)**, narativní hlas Algoritmu (C4) | ⬜ |
+
+## Průřezové zásady (platí od F0)
+- Balanc konstanty jako **externí data** (JSON), ne v kódu.
+- **Determinismus** (seedovaný RNG) kvůli testům a save kompatibilitě.
+- **BigNumber** všude pro měny a ceny.
+- Tick **bez alokací** v horké smyčce.
+- Data-driven obsah.
+
+## Priorita nových mechanik (přání hráče)
+Pořadí obliby: **Minihry (M4) → Streak (M3) → Pozornost (M1) → Synergie (M2)**.
+Toto je priorita *designové důležitosti* (featured status, jistota zařazení).
+**Sekvencování** ve fázích výše se přesto řídí technickými závislostmi:
+- M3 (Streak) a Komentářová ruleta (M4) startují už v **F1** (jsou součástí core loopu).
+- M1 (Pozornost) přijde s boty ve **F4**.
+- M2 (Synergie) s obsahem ve **F5**.
+- Zbylé minihry (M4) ve **F9** (rozhraní `IMiniGameResolver` připraveno dřív).
+
+## Aktuální stav
+- ✅ **F0 hotová** — viz `src/core/{math,time,events}`.
+- 🟡 **F1 probíhá** — Phone FSM, Wallet, CostCurve, CommentPool, dev harness.
