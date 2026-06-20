@@ -12,7 +12,10 @@ export type UpgradeEffectType =
   | 'dopamineMultiplier' // násobí globální produkci Dopaminu
   | 'bandwidth' // zvýší kapacitu sítě (Mbps)
   | 'passiveDopamine' // bot: pasivní Dopamin/s (těží i offline)
-  | 'passiveLikes'; // bot: pasivní Likes/s
+  | 'passiveLikes' // bot: pasivní Likes/s
+  | 'bubbleUnlock' // odemkne minihru s bublinami
+  | 'bubbleValueMult' // násobí hodnotu bublin
+  | 'bubbleRate'; // zvyšuje frekvenci bublin
 
 export interface UpgradeDef {
   readonly id: string;
@@ -45,11 +48,20 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     id: 'dark_mode',
     name: 'Dark Mode',
-    description: 'Saves your eyes for even more scrolling. +10% Dopamine.',
+    description: 'Saves your eyes for even more scrolling. +10% Dopamine, switches to dark theme.',
     icon: '🌙',
     cost: { currency: 'DOP', base: 25, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.1 },
+  },
+  {
+    id: 'dopamine_detector',
+    name: 'Dopamine Detector',
+    description: 'Unlocks the dopamine bubble minigame. Tap bubbles for bonus Dopamine.',
+    icon: '🫧',
+    cost: { currency: 'DOP', base: 30, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'bubbleUnlock', value: 1 },
   },
   {
     id: 'finger_warmup',
@@ -124,6 +136,22 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '🤖',
     cost: { currency: 'DOP', base: 200, multiplier: 1.25 },
     effect: { type: 'passiveDopamine', value: 0.5 },
+  },
+  {
+    id: 'bigger_hits',
+    name: 'Bigger Hits',
+    description: '+25% bubble value per level. (Requires Dopamine Detector.)',
+    icon: '💧',
+    cost: { currency: 'DOP', base: 120, multiplier: 1.4 },
+    effect: { type: 'bubbleValueMult', value: 1.25 },
+  },
+  {
+    id: 'faster_bubbles',
+    name: 'Faster Bubbles',
+    description: '+20% bubble frequency per level. (Requires Dopamine Detector.)',
+    icon: '⏩',
+    cost: { currency: 'DOP', base: 200, multiplier: 1.4 },
+    effect: { type: 'bubbleRate', value: 1.2 },
   },
 
   // ── Mid game ──

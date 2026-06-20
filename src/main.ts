@@ -1,17 +1,18 @@
 /**
  * DEV HARNESS (temporary) — minimal DOM binding to the domain so the core loop is
- * visible in a browser. This is NOT the final UI (that comes in Phase 8: src/ui,
- * DOM + WebGL). It demonstrates the Domain ↔ Presentation split: read state, call
- * Commands, subscribe to events.
+ * visible in a browser. NOT the final UI (that's Phase 8: src/ui, DOM + WebGL).
+ * Renders the whole phone farm, the upgrade bar, the bubble minigame, notifications
+ * and synthesized sound — all driven by domain events / commands.
  */
 import './style.css';
 import { Game, type OfflineEarnings } from './core/domain/Game';
 import { CURRENCIES, type CurrencyId } from './core/economy/currencies';
 import { SaveManager } from './persistence/SaveManager';
+import { SoundManager } from './audio/SoundManager';
 
 const game = new Game({ seed: Date.now() & 0xffff });
 
-// Persistence: načti uložený stav PŘED navázáním UI, ať reference telefonu i lišta sedí.
+// Persistence: load before wiring UI so phone refs & upgrade bar reflect saved state.
 const saver = new SaveManager();
 let offlineResult: OfflineEarnings | null = null;
 const loaded = saver.load();
@@ -22,22 +23,19 @@ if (loaded) {
   if (earned.dopamine.isPositive() || earned.likes.isPositive()) offlineResult = earned;
 }
 
-const phone = game.phones[0]!;
+const sound = new SoundManager();
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header class="topbar">
     <div class="brand"><span class="brand__logo">🧠</span><span>Dopamine Scroller</span></div>
-    <button class="icon-btn topbar__settings" title="Settings" aria-label="Settings">⚙️</button>
+    <button class="icon-btn topbar__settings" id="mute" title="Sound on/off" aria-label="Sound">🔊</button>
   </header>
 
   <div class="hud" id="hud"></div>
 
   <main class="stage">
-    <div class="phone">
-      <div class="phone__screen" id="screen"></div>
-      <div class="actions" id="actions"></div>
-    </div>
+    <div class="phones" id="phones"></div>
     <div class="choices" id="choices"></div>
   </main>
 
@@ -47,11 +45,10 @@ app.innerHTML = `
 `;
 
 const hud = byId('hud');
-const screen = byId('screen');
-const actions = byId('actions');
+const phonesContainer = byId('phones');
 const choices = byId('choices');
 const notifications = byId('notifications');
-const upgrades = byId('upgrades');
+const upgradesBar = byId('upgrades');
 
 const HUD_ORDER: CurrencyId[] = ['DOP', 'LIK', 'COM', 'BR'];
 
@@ -61,13 +58,21 @@ function byId(id: string): HTMLElement {
   return el;
 }
 
+// ── Sound: mute toggle on settings button ──
+const muteBtn = byId('mute');
+muteBtn.addEventListener('click', () => {
+  sound.setEnabled(!sound.isEnabled);
+  muteBtn.textContent = sound.isEnabled ? '🔊' : '🔇';
+});
+
+// ── HUD ──
 function renderHud(): void {
   const money = HUD_ORDER.map(
     (id) => `<span class="hud__item">${CURRENCIES[id].symbol} ${game.wallet.get(id).format()}</span>`,
   ).join('');
-  const overload = game.isOverloaded;
   const dps = game.passiveDopamineRate;
   const rate = dps.isPositive() ? `<span class="hud__item hud__rate">+${dps.format()}/s 🧠</span>` : '';
+  const overload = game.isOverloaded;
   hud.innerHTML =
     money +
     rate +
@@ -77,19 +82,107 @@ function renderHud(): void {
     `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
 }
 
+// ── Phone farm (one card per phone) ──
+interface PhoneCard {
+  screen: HTMLElement;
+  actions: HTMLElement;
+  lastKey: string;
+}
+const cards = new Map<number, PhoneCard>();
+
+function syncPhones(): void {
+  for (const p of game.phones) {
+    let card = cards.get(p.id);
+    if (!card) card = createCard(p.id);
+    const key = p.isReady ? 'ready' : p.state;
+    if (key !== card.lastKey) {
+      card.lastKey = key;
+      renderCard(p.id, card);
+    }
+  }
+}
+
+function createCard(id: number): PhoneCard {
+  const root = document.createElement('div');
+  root.className = 'phone';
+  root.innerHTML = `<div class="phone__screen"></div><div class="actions"></div>`;
+  phonesContainer.appendChild(root);
+  const card: PhoneCard = {
+    screen: root.querySelector('.phone__screen')!,
+    actions: root.querySelector('.actions')!,
+    lastKey: '',
+  };
+  cards.set(id, card);
+  return card;
+}
+
+function renderCard(id: number, card: PhoneCard): void {
+  const p = game.phones.find((x) => x.id === id);
+  if (!p) return;
+  if (p.isReady) {
+    card.screen.innerHTML = `<div class="post">📱<br /><small>${p.post!.rarity}</small></div>`;
+    card.actions.innerHTML = `
+      <button class="icon-btn act" data-act="like" title="Like">👍</button>
+      <button class="icon-btn act" data-act="comment" title="Comment">💬</button>
+      <button class="icon-btn act" data-act="swipe" title="Swipe">⬆️</button>`;
+    const likeBtn = card.actions.querySelector<HTMLButtonElement>('[data-act="like"]')!;
+    likeBtn.addEventListener('click', () => {
+      if (game.like(id)) {
+        likeBtn.classList.add('is-active');
+        likeBtn.disabled = true;
+      }
+    });
+    const commentBtn = card.actions.querySelector<HTMLButtonElement>('[data-act="comment"]')!;
+    commentBtn.addEventListener('click', () => openComments(id, commentBtn));
+    card.actions
+      .querySelector<HTMLButtonElement>('[data-act="swipe"]')!
+      .addEventListener('click', () => game.swipe(id));
+  } else {
+    card.actions.innerHTML = '';
+    card.screen.innerHTML =
+      p.state === 'buffering' ? `<div class="spinner"></div>` : `<div class="post">…</div>`;
+  }
+}
+
+// ── Comment roulette (choices tied to a phone) ──
+function openComments(phoneId: number, commentBtn: HTMLButtonElement): void {
+  const offered = game.offerComments(phoneId);
+  if (!offered) return;
+  choices.innerHTML =
+    `<p class="choices__label">Pick a comment</p>` +
+    offered.map((c) => `<button class="choice" data-id="${c.id}">${escapeHtml(c.text)}</button>`).join('');
+  for (const btn of Array.from(choices.querySelectorAll<HTMLButtonElement>('button.choice'))) {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset['id'];
+      if (id && game.postComment(phoneId, id)) {
+        commentBtn.classList.add('is-active');
+        commentBtn.disabled = true;
+      }
+      clearChoices();
+    });
+  }
+}
+
+function clearChoices(): void {
+  choices.innerHTML = '';
+}
+
+// ── Upgrade bar ──
 function buildUpgrades(): void {
-  upgrades.innerHTML = game
+  upgradesBar.innerHTML = game
     .upgradeView()
     .map(
       (u) => `
       <button class="upg" data-id="${u.id}" title="${escapeHtml(u.description)} (Shift = ×10)">
         <span class="upg__icon">${u.icon}</span>
         <span class="upg__name">${escapeHtml(u.name)}</span>
-        <span class="upg__meta"><span class="upg__lvl"></span><span class="upg__cost"></span></span>
+        <span class="upg__meta">
+          <span class="upg__lvl"></span><span class="upg__cost"></span><span class="upg__net"></span>
+        </span>
       </button>`,
     )
     .join('');
-  for (const btn of Array.from(upgrades.querySelectorAll<HTMLButtonElement>('button.upg'))) {
+  for (const btn of Array.from(upgradesBar.querySelectorAll<HTMLButtonElement>('button.upg'))) {
     btn.addEventListener('click', (ev) => {
       const id = btn.dataset['id'];
       if (id) game.buy(id, ev.shiftKey ? 10 : 1);
@@ -100,93 +193,94 @@ function buildUpgrades(): void {
 
 function refreshUpgrades(): void {
   for (const u of game.upgradeView()) {
-    const btn = upgrades.querySelector<HTMLButtonElement>(`button[data-id="${u.id}"]`);
+    const btn = upgradesBar.querySelector<HTMLButtonElement>(`button[data-id="${u.id}"]`);
     if (!btn) continue;
     btn.querySelector('.upg__lvl')!.textContent = u.maxed ? 'MAX' : u.level > 0 ? `Lv ${u.level}` : '';
     btn.querySelector('.upg__cost')!.textContent = u.maxed
       ? ''
       : `${CURRENCIES[u.costCurrency].symbol} ${u.cost.format()}`;
+    const net = btn.querySelector<HTMLElement>('.upg__net')!;
+    if (u.networkKind === 'uses') {
+      net.textContent = `📶 −${u.networkDelta}`;
+      net.className = 'upg__net upg__net--uses';
+    } else if (u.networkKind === 'adds') {
+      net.textContent = `📶 +${u.networkDelta}`;
+      net.className = 'upg__net upg__net--adds';
+    } else {
+      net.textContent = '';
+    }
     btn.disabled = u.maxed || !u.affordable;
     btn.classList.toggle('is-owned', u.level > 0);
   }
 }
 
-// Rebuild the phone screen + action buttons only when the phone's state changes,
-// so the streaming reactions / choices aren't clobbered every frame.
-let lastStateKey = '';
-function syncPhone(): void {
-  const key = phone.isReady ? 'ready' : phone.state;
-  if (key === lastStateKey) return;
-  lastStateKey = key;
-
-  if (phone.isReady) {
-    screen.innerHTML = `<div class="post">📱<br /><small>post · ${phone.post!.rarity}</small></div>`;
-    actions.innerHTML = `
-      <button class="icon-btn act" id="like" title="Like" aria-label="Like">👍</button>
-      <button class="icon-btn act" id="comment" title="Comment" aria-label="Comment">💬</button>
-      <button class="icon-btn act" id="swipe" title="Swipe" aria-label="Swipe">⬆️</button>`;
-    byId('like').addEventListener('click', onLike);
-    byId('comment').addEventListener('click', onComment);
-    byId('swipe').addEventListener('click', onSwipe);
-  } else {
-    clearChoices();
-    actions.innerHTML = '';
-    screen.innerHTML =
-      phone.state === 'buffering' ? `<div class="spinner"></div>` : `<div class="post">…</div>`;
-  }
+// ── Notifications ──
+function pushNote(text: string, cls: string, ttl = 1400): void {
+  const note = document.createElement('div');
+  note.className = `note ${cls}`;
+  note.textContent = text;
+  notifications.prepend(note);
+  window.setTimeout(() => note.remove(), ttl);
+  while (notifications.childElementCount > 8) notifications.lastElementChild?.remove();
 }
 
-function onLike(): void {
-  if (game.like(phone.id)) {
-    byId('like').classList.add('is-active');
-    byId('like').setAttribute('disabled', 'true');
-  }
+function showOfflineToast(e: OfflineEarnings): void {
+  const parts: string[] = [];
+  if (e.dopamine.isPositive()) parts.push(`+${e.dopamine.format()} 🧠`);
+  if (e.likes.isPositive()) parts.push(`+${e.likes.format()} 👍`);
+  pushNote(`💤 While away (${formatDuration(e.seconds)}): ${parts.join(' · ')}`, 'note--offline', 7000);
 }
 
-function onComment(): void {
-  if (!phone.canComment) return;
-  const offered = game.offerComments(phone.id);
-  if (!offered) return;
-  choices.innerHTML =
-    `<p class="choices__label">Pick a comment</p>` +
-    offered
-      .map((c) => `<button class="choice" data-id="${c.id}">${escapeHtml(c.text)}</button>`)
-      .join('');
-  for (const btn of Array.from(choices.querySelectorAll<HTMLButtonElement>('button.choice'))) {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset['id'];
-      if (id && game.postComment(phone.id, id)) {
-        byId('comment').classList.add('is-active');
-        byId('comment').setAttribute('disabled', 'true');
-      }
-      clearChoices();
-    });
-  }
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${Math.floor(seconds)}s`;
 }
 
-function onSwipe(): void {
-  game.swipe(phone.id);
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
-function clearChoices(): void {
-  choices.innerHTML = '';
-}
-
-// ── Reactions stream in over time as little notifications (the delayed feedback) ──
-game.bus.on('CommentReaction', (e) => {
-  pushNote(e.kind === 'like' ? '👍 +1' : '👎 −1', e.kind === 'like' ? 'note--like' : 'note--dislike');
-});
+// ── Domain events → sound + visual feedback ──
+game.bus.on('SwipeResolved', () => sound.swipe());
+game.bus.on('Liked', () => sound.like());
+game.bus.on('CommentPosted', () => sound.comment());
+game.bus.on('CommentReaction', (e) => sound.reactionTick(e.kind === 'like'));
 game.bus.on('CommentResolved', (e) => {
   const r = e.result;
-  const label =
-    r.outcome === 'viral' ? '🌟 Viral!' : r.outcome === 'flop' ? '💀 Flop' : '😐 Meh';
+  if (r.outcome === 'viral') sound.goodComment();
+  else if (r.outcome === 'flop') sound.badComment();
+  const label = r.outcome === 'viral' ? '🌟 Viral!' : r.outcome === 'flop' ? '💀 Flop' : '😐 Meh';
   const gain = r.dopamine.isPositive() ? ` +${r.dopamine.format()} 🧠` : '';
   const br = r.brainRot.isPositive() ? ` +${r.brainRot.format()} 🧟` : '';
   pushNote(`${label}${gain}${br}`, 'note--outcome', 4000);
 });
-game.bus.on('HiddenGemFound', (e) => pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000));
+game.bus.on('HiddenGemFound', (e) => {
+  sound.gem();
+  pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000);
+});
+game.bus.on('UpgradePurchased', (e) => {
+  sound.upgrade();
+  const u = game.upgradeView().find((x) => x.id === e.id);
+  if (u && u.networkKind === 'uses') {
+    pushNote(
+      `📶 +${u.networkDelta} Mbps used (${game.bandwidthConsumption}/${game.totalBandwidth})`,
+      game.isOverloaded ? 'note--dislike' : 'note--like',
+      2600,
+    );
+  } else if (u && u.networkKind === 'adds') {
+    pushNote(
+      `📶 +${u.networkDelta} Mbps capacity (${game.bandwidthConsumption}/${game.totalBandwidth})`,
+      'note--like',
+      2600,
+    );
+  }
+  if (game.isOverloaded) pushNote('⚠️ Network overloaded — buffering slowed!', 'note--dislike', 3000);
+});
 
-// ── Dopamine bubble minigame: tap the bubbles for bonus Dopamine ──
+// ── Dopamine bubble minigame ──
 const bubbleLayer = document.createElement('div');
 bubbleLayer.className = 'bubbles';
 document.body.appendChild(bubbleLayer);
@@ -205,7 +299,10 @@ game.bus.on('BubbleSpawned', (e) => {
   bubbleLayer.appendChild(el);
   bubbleEls.set(e.id, el);
 });
-game.bus.on('BubblePopped', (e) => removeBubble(e.id));
+game.bus.on('BubblePopped', (e) => {
+  sound.bubble();
+  removeBubble(e.id);
+});
 game.bus.on('BubbleExpired', (e) => removeBubble(e.id));
 
 function removeBubble(id: number): void {
@@ -216,37 +313,14 @@ function removeBubble(id: number): void {
   }
 }
 
-function pushNote(text: string, cls: string, ttl = 1400): void {
-  const note = document.createElement('div');
-  note.className = `note ${cls}`;
-  note.textContent = text;
-  notifications.prepend(note);
-  setTimeout(() => note.remove(), ttl);
-  while (notifications.childElementCount > 8) notifications.lastElementChild?.remove();
+// ── Theme: Dark Mode upgrade flips the whole UI ──
+function applyTheme(): void {
+  document.documentElement.classList.toggle('dark', game.upgrades.level('dark_mode') > 0);
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-}
-
-function showOfflineToast(e: OfflineEarnings): void {
-  const parts: string[] = [];
-  if (e.dopamine.isPositive()) parts.push(`+${e.dopamine.format()} 🧠`);
-  if (e.likes.isPositive()) parts.push(`+${e.likes.format()} 👍`);
-  pushNote(`💤 While away (${formatDuration(e.seconds)}): ${parts.join(' · ')}`, 'note--offline', 7000);
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return `${Math.floor(seconds)}s`;
-}
-
+// ── Boot ──
 buildUpgrades();
-
-// Offline earnings toast + autosave to localStorage.
+applyTheme();
 if (offlineResult) showOfflineToast(offlineResult);
 saver.startAutosave(() => game.serialize(), 5000);
 window.addEventListener('beforeunload', () => saver.save(game.serialize()));
@@ -257,8 +331,9 @@ function frame(now: number): void {
   game.clock.update(now - last);
   last = now;
   renderHud();
-  syncPhone();
+  syncPhones();
   refreshUpgrades();
+  applyTheme();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

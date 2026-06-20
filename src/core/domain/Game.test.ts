@@ -278,11 +278,29 @@ describe('Game — pasivní příjem & offline', () => {
 });
 
 describe('Game — dopaminové bubliny (minihra)', () => {
-  it('po čase vyskočí bublina a jde sebrat za Dopamin', () => {
+  /** Hra s odemčenou minihrou (koupený Dopamine Detector). */
+  function withBubbles(seed = 1): Game {
+    const game = new Game({ seed });
+    game.wallet.add('DOP', BigNumber.of(100000));
+    game.buy('dopamine_detector', 1);
+    return game;
+  }
+
+  it('bubliny nespawnují bez odemčení', () => {
     const game = new Game({ seed: 1 });
+    expect(game.bubblesUnlocked).toBe(false);
+    let spawned = false;
+    game.bus.on('BubbleSpawned', () => (spawned = true));
+    for (let i = 0; i < 200; i++) game.advance(0.2); // 40 s
+    expect(spawned).toBe(false);
+  });
+
+  it('po odemčení se bublina po čase objeví a jde sebrat za Dopamin', () => {
+    const game = withBubbles();
+    expect(game.bubblesUnlocked).toBe(true);
     let spawned: { id: number } | null = null;
     game.bus.on('BubbleSpawned', (e) => (spawned = e));
-    for (let i = 0; i < 100 && spawned === null; i++) game.advance(0.2);
+    for (let i = 0; i < 200 && spawned === null; i++) game.advance(0.2);
     expect(spawned).not.toBeNull();
     const before = game.wallet.get('DOP').toNumber();
     const id = (spawned as unknown as { id: number }).id;
@@ -296,7 +314,7 @@ describe('Game — dopaminové bubliny (minihra)', () => {
   });
 
   it('bublina po čase expiruje', () => {
-    const game = new Game({ seed: 1 });
+    const game = withBubbles();
     let spawnedId: number | null = null;
     let expiredId: number | null = null;
     game.bus.on('BubbleSpawned', (e) => {
@@ -305,14 +323,14 @@ describe('Game — dopaminové bubliny (minihra)', () => {
     game.bus.on('BubbleExpired', (e) => {
       if (e.id === spawnedId) expiredId = e.id;
     });
-    for (let i = 0; i < 100 && spawnedId === null; i++) game.advance(0.2);
+    for (let i = 0; i < 200 && spawnedId === null; i++) game.advance(0.2);
     expect(spawnedId).not.toBeNull();
-    for (let i = 0; i < 30; i++) game.advance(0.2); // > lifetime (4 s)
+    for (let i = 0; i < 40; i++) game.advance(0.2); // > lifetime
     expect(expiredId).toBe(spawnedId);
   });
 
   it('nikdy není víc než MAX bublin naráz', () => {
-    const game = new Game({ seed: 1 });
+    const game = withBubbles();
     let active = 0;
     let peak = 0;
     game.bus.on('BubbleSpawned', () => {
@@ -320,8 +338,26 @@ describe('Game — dopaminové bubliny (minihra)', () => {
       peak = Math.max(peak, active);
     });
     game.bus.on('BubbleExpired', () => active--);
-    for (let i = 0; i < 300; i++) game.advance(0.1);
-    expect(peak).toBeLessThanOrEqual(3);
+    for (let i = 0; i < 600; i++) game.advance(0.1);
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it('upgrade hodnoty zvýší odměnu z bubliny', () => {
+    const game = withBubbles();
+    game.wallet.add('DOP', BigNumber.of(100000));
+    const grab = (): number => {
+      let spawned: { id: number } | null = null;
+      const off = game.bus.on('BubbleSpawned', (e) => (spawned = e));
+      for (let i = 0; i < 200 && spawned === null; i++) game.advance(0.2);
+      off();
+      const before = game.wallet.get('DOP').toNumber();
+      game.popBubble((spawned as unknown as { id: number }).id);
+      return game.wallet.get('DOP').toNumber() - before;
+    };
+    const v1 = grab();
+    game.buy('bigger_hits', 1); // +25 % hodnoty
+    const v2 = grab();
+    expect(v2).toBeGreaterThan(v1);
   });
 });
 

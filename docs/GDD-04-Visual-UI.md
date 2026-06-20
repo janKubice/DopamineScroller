@@ -86,3 +86,13 @@ Doména (src/core)  ──events──►  Prezentace (src/ui)
 Prezentace čte stav + reaguje na eventy; do domény posílá jen Commands
 (BuyPhone, Swipe, PostComment, AllocateBandwidth ...).
 ```
+
+## 5. Stav dev harnessu (dočasné UI)
+
+Než přijde plné UI (Fáze 8), dev harness už ukazuje principy:
+- **Farma telefonů** — vykresluje se *každý* telefon (po koupi se rovnou objeví nová karta).
+- **Dark Mode** — upgrade 🌙 přepne celé UI do tmavého motivu (CSS proměnné + třída `html.dark`).
+- **Síťové indikátory** — upgrady ukazují `📶 ±X`, HUD `📶 spotřeba/kapacita` + ⚠️ při přetížení.
+- **Zvuky** — syntetizované přes Web Audio (`SoundManager`): like, comment, dobrý/špatný komentář,
+  pop bubliny, swipe, upgrade, hidden gem, cvakání naskakujících reakcí. Mute v horním pruhu.
+- Vše čistě jako reakce na doménové eventy / Commands — žádná herní logika v UI.

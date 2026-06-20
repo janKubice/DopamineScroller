@@ -164,9 +164,10 @@ Diegetické dark patterns. Krátké přerušovací moduly s rozhraním `IMiniGam
 (Doména spustí, vyhodnotí `{success, timing}` → modifikátor odměny).
 
 - **Komentářová ruleta** — viz `GDD-01 §4` (vlajková minihra, součást core loopu).
-- **Dopaminové bubliny** ✅ — *implementováno*: klikatelné 🧠 bubliny vyskakují každých
-  ~2,5–5 s, kliknutím dají Dopamin (≈ 5 swipů hodnoty) a posílí streak. Vyplňují čekání na
-  load a oživují early game. Doména: `Game.popBubble`, eventy `BubbleSpawned/Popped/Expired`.
+- **Dopaminové bubliny** ✅ — *implementováno*: **odemyká se upgradem** 🫧 Dopamine Detector
+  (~30 DOP). Pak klikatelné 🧠 bubliny vyskakují ~8–14 s (max 2 naráz), kliknutím dají Dopamin
+  (≈ 2 swipy hodnoty) a posílí streak. **Vylepšitelné**: 💧 Bigger Hits (hodnota), ⏩ Faster
+  Bubbles (frekvence). Doména: `Game.bubblesUnlocked`/`popBubble`, eventy `BubbleSpawned/Popped/Expired`.
 - **CAPTCHA** („Ověřte, že jste člověk") — ironie: snažíš se *být bot*. Manuál = burst odměny.
   **Boti CAPTCHU nevyřeší** → buď klikáš, nebo koupíš „Farmu na řešení CAPTCHA".
 - **Skip Ad** — trefit mizející drobné „×". „Premium bez reklam" = **opakovaný náklad** (satira předplatného).

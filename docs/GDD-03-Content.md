@@ -90,11 +90,16 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > (`passiveDopamine`/`passiveLikes`), který je násoben penalizací sítě (přetížení zpomalí
 > i těžbu) a u Dopaminu i algoritmy. Balanc konstanty → JSON ve Fázi 9.
 
-> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **21 upgradů** seřazených
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **24 upgradů** seřazených
 > od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
 > kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
 > For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),
-> hardware, síť a boti. Tabulka výše je výběr; zdroj pravdy je `upgrades.ts`.
+> minihra (🫧 Dopamine Detector odemyká bubliny, 💧 Bigger Hits, ⏩ Faster Bubbles), hardware,
+> síť a boti. 🌙 **Dark Mode** navíc přepne UI do tmavého motivu. Zdroj pravdy je `upgrades.ts`.
+
+> **Síťový dopad v UI:** tlačítka upgradů ukazují `📶 −X` (spotřeba: telefony, boti) nebo
+> `📶 +X` (kapacita: routery), a po nákupu vyskočí notifikace s aktuální spotřebou/kapacitou.
+> View model: `UpgradeView.networkDelta`/`networkKind`.
 
 ## 4. Temná větev: Brain Rot
 

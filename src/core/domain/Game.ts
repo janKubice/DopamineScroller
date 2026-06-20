@@ -63,6 +63,9 @@ export interface UpgradeView {
   cost: BigNumber;
   costCurrency: CurrencyId;
   affordable: boolean;
+  /** Dopad na síť (Mbps). `uses` = spotřebovává, `adds` = zvyšuje kapacitu. */
+  networkDelta: number;
+  networkKind: 'uses' | 'adds' | 'none';
 }
 
 // ── Balanc konstanty (Fáze 9 je externalizuje do dat) ──
@@ -76,13 +79,13 @@ const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
 const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
 const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
 
-// ── Minihra: dopaminové bubliny ──
-const BUBBLE_MIN_INTERVAL = 2.5; // s mezi spawny (min)
-const BUBBLE_MAX_INTERVAL = 5; // s mezi spawny (max)
-const BUBBLE_LIFETIME = 4; // s než bublina zmizí
-const MAX_BUBBLES = 3; // max bublin naráz
-const BUBBLE_REWARD_FACTOR = 5; // hodnota ≈ 5 swipů
-const BUBBLE_MIN_REWARD = 3; // minimální odměna early game
+// ── Minihra: dopaminové bubliny (odemyká se upgradem) ──
+const BUBBLE_MIN_INTERVAL = 8; // s mezi spawny (min, před upgrady frekvence)
+const BUBBLE_MAX_INTERVAL = 14; // s mezi spawny (max)
+const BUBBLE_LIFETIME = 4.5; // s než bublina zmizí
+const MAX_BUBBLES = 2; // max bublin naráz
+const BUBBLE_REWARD_FACTOR = 2; // hodnota ≈ 2 swipy (před upgrady hodnoty)
+const BUBBLE_MIN_REWARD = 2; // minimální odměna
 
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
@@ -339,6 +342,7 @@ export class Game implements Tickable {
     return this.upgrades.all.map((def) => {
       const maxed = this.upgrades.isMaxed(def.id);
       const cost = this.upgrades.nextCost(def.id) ?? BigNumber.ZERO;
+      const network = this.networkImpact(def);
       return {
         id: def.id,
         name: def.name,
@@ -349,8 +353,25 @@ export class Game implements Tickable {
         cost,
         costCurrency: def.cost.currency,
         affordable: !maxed && this.wallet.canAfford(def.cost.currency, cost),
+        networkDelta: network.delta,
+        networkKind: network.kind,
       };
     });
+  }
+
+  /** Dopad upgradu na síť (pro UI: co stojí síť / co kapacitu přidává). */
+  private networkImpact(def: UpgradeDef): { delta: number; kind: 'uses' | 'adds' | 'none' } {
+    switch (def.effect.type) {
+      case 'addPhone':
+        return { delta: PHONE_BANDWIDTH_COST * def.effect.value, kind: 'uses' };
+      case 'passiveDopamine':
+      case 'passiveLikes':
+        return { delta: BOT_BANDWIDTH_COST, kind: 'uses' };
+      case 'bandwidth':
+        return { delta: def.effect.value, kind: 'adds' };
+      default:
+        return { delta: 0, kind: 'none' };
+    }
   }
 
   // ── Persistence & offline ───────────────────────────────────────────────────
@@ -416,11 +437,18 @@ export class Game implements Tickable {
     this.advanceBubbles(dt);
   }
 
-  /** Minihra: spawn/expirace dopaminových bublin. */
+  /** Je minihra s bublinami odemčená? (upgrade Dopamine Detector) */
+  get bubblesUnlocked(): boolean {
+    return this.sumEffect('bubbleUnlock') > 0;
+  }
+
+  /** Minihra: spawn/expirace dopaminových bublin (spawn jen pokud odemčeno). */
   private advanceBubbles(dt: number): void {
-    this.bubbleTimer += dt;
-    if (this.bubbleTimer >= this.nextBubbleIn && this.bubbles.length < MAX_BUBBLES) {
-      this.spawnBubble();
+    if (this.bubblesUnlocked) {
+      this.bubbleTimer += dt;
+      if (this.bubbleTimer >= this.nextBubbleIn && this.bubbles.length < MAX_BUBBLES) {
+        this.spawnBubble();
+      }
     }
     for (let i = this.bubbles.length - 1; i >= 0; i--) {
       const bubble = this.bubbles[i]!;
@@ -441,14 +469,33 @@ export class Game implements Tickable {
     this.bus.emit('BubbleSpawned', { id, value });
   }
 
-  /** Hodnota bubliny ≈ 5 swipů, aby zůstala relevantní i v mid game. */
+  /** Hodnota bubliny ≈ 2 swipy × upgrady hodnoty. */
   private bubbleValue(): BigNumber {
     const perSwipe = BASE_POST_VALUE.mul(this.productionMultiplier);
-    return BigNumber.max(BigNumber.of(BUBBLE_MIN_REWARD), perSwipe.mul(BigNumber.of(BUBBLE_REWARD_FACTOR)));
+    const raw = perSwipe.mul(BigNumber.of(BUBBLE_REWARD_FACTOR)).mul(this.bubbleValueMultiplier());
+    return BigNumber.max(BigNumber.of(BUBBLE_MIN_REWARD), raw);
+  }
+
+  private bubbleValueMultiplier(): BigNumber {
+    let m = BigNumber.ONE;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === 'bubbleValueMult') {
+        const lvl = this.upgrades.level(def.id);
+        if (lvl > 0) m = m.mul(BigNumber.of(def.effect.value).pow(lvl));
+      }
+    }
+    return m;
   }
 
   private rollBubbleInterval(): number {
-    return BUBBLE_MIN_INTERVAL + this.rng.next() * (BUBBLE_MAX_INTERVAL - BUBBLE_MIN_INTERVAL);
+    const base = BUBBLE_MIN_INTERVAL + this.rng.next() * (BUBBLE_MAX_INTERVAL - BUBBLE_MIN_INTERVAL);
+    let rate = 1;
+    for (const def of this.upgrades.all) {
+      if (def.effect.type === 'bubbleRate') {
+        rate *= Math.pow(def.effect.value, this.upgrades.level(def.id));
+      }
+    }
+    return base / rate;
   }
 
   /** Pasivní příjem z botů (čte se přímo, HUD si HUD aktualizuje sám). */
@@ -519,6 +566,11 @@ export class Game implements Tickable {
       case 'passiveDopamine':
       case 'passiveLikes':
         // čtou se dynamicky v passive*Rate – žádná akce není potřeba.
+        break;
+      case 'bubbleUnlock':
+      case 'bubbleValueMult':
+      case 'bubbleRate':
+        // čtou se dynamicky v minihře – žádná akce není potřeba.
         break;
     }
   }
