@@ -26,5 +26,33 @@ Limit bonusu na jeden buffer, ať to není zneužitelné.
 
 ---
 
+## Na opravu / rework (od hráče)
+
+### 🔧 FIX1 — Boti mají reálně obsluhovat telefony (ne abstraktní rate)  `[F4 rework]`
+**Dnešní stav:** `auto_liker`/`auto_scroller` jsou jen `passiveLikes`/`passiveDopamine`
+(+X/s do peněženky) — *neinteragují s telefony*. **Cíl** (očekávání hráče + původní GDD):
+- **Auto-Liker** — lajkuje *načtené, nelajknuté* posty rychlostí danou levelem (lajků/s).
+  Čím víc telefonů, tím vyšší level potřeba, aby to stíhal; co nestihne, zůstane nelajknuté
+  (ušlý zisk). Upgrady zvyšují rychlost.
+- **Auto-Scroller** — jakmile jsou interakce hotové (nebo po prodlevě dle levelu), automaticky
+  swipne post. Rychlost/prodleva dle levelu; musí stíhat počet telefonů.
+- **Auto-Commenter (NOVÝ)** — automaticky vybere a postne komentář (vyřeší ruletu) na načtené
+  posty; rychlost dle levelu. Generuje COM + reakce. Upgrady: rychlost (příp. bias na kvalitu).
+- **Návrh:** každý bot = „pool pracovníků" s propustností (akcí/s); každý tick rozdělí akce
+  mezi vhodné telefony. Škálování s počtem telefonů → tlak kupovat lepší boty (přesně jak chce hráč).
+- **Offline:** s auto-scrollerem řídícím telefony počítat swipe-cykly **uzavřeně**
+  (cycleTime ≈ bufferTime/scale + prodleva) × telefony, zastropováno. Nahradí dnešní plochý
+  `passiveDopamine` offline výpočet.
+- Spotřeba sítě botů zůstává (napojení na bandwidth z F3).
+- *Pozn.: tohle je posun od „idle rate" abstrakce zpět k „bots jako tick-aktoři na telefonech".*
+
+### 🔧 FIX2 — Viditelný postih při nedostatku sítě  `[F8 · lze hned]`
+Při přetížení (`game.isOverloaded`) udělat postih **vidět**, ne jen malé ⚠️ v HUD:
+- Telefony v „throttled" stavu — červený/zpomalený spinner, ztmavnutí karty, štítek „SLOW".
+- Výrazný banner: „⚠️ NETWORK OVERLOADED — everything is crawling".
+- Volitelně: ukazatel reálné rychlosti bufferingu (×0.07 apod.).
+
+---
+
 ## Pozn.
 Položky se po implementaci přesouvají do příslušné fáze v `GDD-06-Roadmap.md` a mažou odtud.
