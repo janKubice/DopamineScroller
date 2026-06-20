@@ -90,6 +90,12 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > (`passiveDopamine`/`passiveLikes`), který je násoben penalizací sítě (přetížení zpomalí
 > i těžbu) a u Dopaminu i algoritmy. Balanc konstanty → JSON ve Fázi 9.
 
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **21 upgradů** seřazených
+> od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
+> kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
+> For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),
+> hardware, síť a boti. Tabulka výše je výběr; zdroj pravdy je `upgrades.ts`.
+
 ## 4. Temná větev: Brain Rot
 
 Kupováno za Brain Rot. Způsobuje vizuální poškození UI (glitche, reklamy), ale obrovsky zvyšuje produkci.

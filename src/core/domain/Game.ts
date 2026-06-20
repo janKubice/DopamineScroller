@@ -38,6 +38,10 @@ export interface GameEvents extends EventMap {
   CurrencyChanged: { id: CurrencyId; total: BigNumber };
   StreakChanged: { value: number };
   UpgradePurchased: { id: string; level: number };
+  /** Minihra: vyskočila dopaminová bublina ke kliknutí. */
+  BubbleSpawned: { id: number; value: BigNumber };
+  BubblePopped: { id: number; value: BigNumber };
+  BubbleExpired: { id: number };
 }
 
 /** Výsledek offline těžby (po načtení hry). */
@@ -72,6 +76,14 @@ const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
 const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
 const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
 
+// ── Minihra: dopaminové bubliny ──
+const BUBBLE_MIN_INTERVAL = 2.5; // s mezi spawny (min)
+const BUBBLE_MAX_INTERVAL = 5; // s mezi spawny (max)
+const BUBBLE_LIFETIME = 4; // s než bublina zmizí
+const MAX_BUBBLES = 3; // max bublin naráz
+const BUBBLE_REWARD_FACTOR = 5; // hodnota ≈ 5 swipů
+const BUBBLE_MIN_REWARD = 3; // minimální odměna early game
+
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
 
@@ -97,6 +109,13 @@ interface ActiveReaction {
   creditedFraction: number;
 }
 
+/** Aktivní dopaminová bublina (minihra). */
+interface ActiveBubble {
+  id: number;
+  value: BigNumber;
+  remaining: number;
+}
+
 export interface GameOptions {
   seed?: number;
   comments?: CommentPool;
@@ -120,6 +139,10 @@ export class Game implements Tickable {
   private readonly comments: CommentPool;
   private readonly pendingComments = new Map<number, CommentDef[]>();
   private readonly reactions: ActiveReaction[] = [];
+  private readonly bubbles: ActiveBubble[] = [];
+  private bubbleTimer = 0;
+  private nextBubbleIn = BUBBLE_MIN_INTERVAL;
+  private nextBubbleId = 1;
   private streakValue = STREAK_FLOOR;
   private virality = 0;
   private nextPhoneId = 1;
@@ -131,6 +154,7 @@ export class Game implements Tickable {
     this.upgrades = new UpgradeStore(options.upgrades ?? UPGRADES);
     this.clock = new GameClock(this);
     this.addPhone(options.phoneConfig ?? DEFAULT_PHONE_CONFIG);
+    this.nextBubbleIn = this.rollBubbleInterval();
   }
 
   addPhone(config: PhoneConfig = DEFAULT_PHONE_CONFIG): Phone {
@@ -298,6 +322,18 @@ export class Game implements Tickable {
     return n;
   }
 
+  /** Minihra: sebere dopaminovou bublinu, připíše Dopamin a posílí streak. */
+  popBubble(id: number): BigNumber | null {
+    const idx = this.bubbles.findIndex((b) => b.id === id);
+    if (idx < 0) return null;
+    const bubble = this.bubbles[idx]!;
+    this.bubbles.splice(idx, 1);
+    this.credit('DOP', bubble.value);
+    this.bumpStreak();
+    this.bus.emit('BubblePopped', { id, value: bubble.value });
+    return bubble.value;
+  }
+
   /** View model upgradů pro prezentaci (spodní lišta). */
   upgradeView(): UpgradeView[] {
     return this.upgrades.all.map((def) => {
@@ -340,6 +376,9 @@ export class Game implements Tickable {
     this.virality = data.virality;
     this.reactions.length = 0;
     this.pendingComments.clear();
+    this.bubbles.length = 0;
+    this.bubbleTimer = 0;
+    this.nextBubbleIn = this.rollBubbleInterval();
     this.phones.length = 0;
     this.nextPhoneId = 1;
     const count = Math.max(1, Math.floor(data.phoneCount));
@@ -374,6 +413,42 @@ export class Game implements Tickable {
     }
     this.advanceReactions(dt);
     this.advancePassive(dt);
+    this.advanceBubbles(dt);
+  }
+
+  /** Minihra: spawn/expirace dopaminových bublin. */
+  private advanceBubbles(dt: number): void {
+    this.bubbleTimer += dt;
+    if (this.bubbleTimer >= this.nextBubbleIn && this.bubbles.length < MAX_BUBBLES) {
+      this.spawnBubble();
+    }
+    for (let i = this.bubbles.length - 1; i >= 0; i--) {
+      const bubble = this.bubbles[i]!;
+      bubble.remaining -= dt;
+      if (bubble.remaining <= 0) {
+        this.bubbles.splice(i, 1);
+        this.bus.emit('BubbleExpired', { id: bubble.id });
+      }
+    }
+  }
+
+  private spawnBubble(): void {
+    const id = this.nextBubbleId++;
+    const value = this.bubbleValue();
+    this.bubbles.push({ id, value, remaining: BUBBLE_LIFETIME });
+    this.bubbleTimer = 0;
+    this.nextBubbleIn = this.rollBubbleInterval();
+    this.bus.emit('BubbleSpawned', { id, value });
+  }
+
+  /** Hodnota bubliny ≈ 5 swipů, aby zůstala relevantní i v mid game. */
+  private bubbleValue(): BigNumber {
+    const perSwipe = BASE_POST_VALUE.mul(this.productionMultiplier);
+    return BigNumber.max(BigNumber.of(BUBBLE_MIN_REWARD), perSwipe.mul(BigNumber.of(BUBBLE_REWARD_FACTOR)));
+  }
+
+  private rollBubbleInterval(): number {
+    return BUBBLE_MIN_INTERVAL + this.rng.next() * (BUBBLE_MAX_INTERVAL - BUBBLE_MIN_INTERVAL);
   }
 
   /** Pasivní příjem z botů (čte se přímo, HUD si HUD aktualizuje sám). */

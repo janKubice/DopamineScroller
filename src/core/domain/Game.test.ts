@@ -276,3 +276,60 @@ describe('Game — pasivní příjem & offline', () => {
     expect(earn.seconds).toBe(8 * 3600);
   });
 });
+
+describe('Game — dopaminové bubliny (minihra)', () => {
+  it('po čase vyskočí bublina a jde sebrat za Dopamin', () => {
+    const game = new Game({ seed: 1 });
+    let spawned: { id: number } | null = null;
+    game.bus.on('BubbleSpawned', (e) => (spawned = e));
+    for (let i = 0; i < 100 && spawned === null; i++) game.advance(0.2);
+    expect(spawned).not.toBeNull();
+    const before = game.wallet.get('DOP').toNumber();
+    const id = (spawned as unknown as { id: number }).id;
+    expect(game.popBubble(id)).not.toBeNull();
+    expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before);
+  });
+
+  it('sebrání neexistující bubliny vrací null', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.popBubble(999)).toBeNull();
+  });
+
+  it('bublina po čase expiruje', () => {
+    const game = new Game({ seed: 1 });
+    let spawnedId: number | null = null;
+    let expiredId: number | null = null;
+    game.bus.on('BubbleSpawned', (e) => {
+      if (spawnedId === null) spawnedId = e.id;
+    });
+    game.bus.on('BubbleExpired', (e) => {
+      if (e.id === spawnedId) expiredId = e.id;
+    });
+    for (let i = 0; i < 100 && spawnedId === null; i++) game.advance(0.2);
+    expect(spawnedId).not.toBeNull();
+    for (let i = 0; i < 30; i++) game.advance(0.2); // > lifetime (4 s)
+    expect(expiredId).toBe(spawnedId);
+  });
+
+  it('nikdy není víc než MAX bublin naráz', () => {
+    const game = new Game({ seed: 1 });
+    let active = 0;
+    let peak = 0;
+    game.bus.on('BubbleSpawned', () => {
+      active++;
+      peak = Math.max(peak, active);
+    });
+    game.bus.on('BubbleExpired', () => active--);
+    for (let i = 0; i < 300; i++) game.advance(0.1);
+    expect(peak).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('Game — early game pacing', () => {
+  it('první upgrade je dostupný už za 10 DOP', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(10));
+    expect(game.buy('energy_drink', 1)).toBe(1);
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.15, 5);
+  });
+});

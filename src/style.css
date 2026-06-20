@@ -260,6 +260,51 @@ body {
   }
 }
 
+/* ── Dopamine bubble minigame ── */
+.bubbles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.bubble {
+  position: absolute;
+  pointer-events: auto;
+  font-size: 34px;
+  width: 56px;
+  height: 56px;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #ffd6ec 70%, #ff9ed6);
+  box-shadow: 0 4px 14px rgba(233, 30, 140, 0.35);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  animation: bubble-in 0.2s ease-out, bubble-bob 1.6s ease-in-out infinite 0.2s;
+}
+
+.bubble:hover {
+  transform: scale(1.08);
+}
+
+.bubble:active {
+  transform: scale(0.9);
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
+@keyframes bubble-bob {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 /* ── Bottom upgrades bar ── */
 .upgrades {
   border-top: 1px solid #e3e3e3;

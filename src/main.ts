@@ -186,6 +186,36 @@ game.bus.on('CommentResolved', (e) => {
 });
 game.bus.on('HiddenGemFound', (e) => pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000));
 
+// ── Dopamine bubble minigame: tap the bubbles for bonus Dopamine ──
+const bubbleLayer = document.createElement('div');
+bubbleLayer.className = 'bubbles';
+document.body.appendChild(bubbleLayer);
+const bubbleEls = new Map<number, HTMLElement>();
+
+game.bus.on('BubbleSpawned', (e) => {
+  const el = document.createElement('button');
+  el.className = 'bubble';
+  el.textContent = '🧠';
+  el.style.top = `${22 + Math.random() * 48}%`;
+  el.style.left = `${8 + Math.random() * 78}%`;
+  el.addEventListener('click', () => {
+    const v = game.popBubble(e.id);
+    if (v) pushNote(`+${v.format()} 🧠`, 'note--like', 1200);
+  });
+  bubbleLayer.appendChild(el);
+  bubbleEls.set(e.id, el);
+});
+game.bus.on('BubblePopped', (e) => removeBubble(e.id));
+game.bus.on('BubbleExpired', (e) => removeBubble(e.id));
+
+function removeBubble(id: number): void {
+  const el = bubbleEls.get(id);
+  if (el) {
+    el.remove();
+    bubbleEls.delete(id);
+  }
+}
+
 function pushNote(text: string, cls: string, ttl = 1400): void {
   const note = document.createElement('div');
   note.className = `note ${cls}`;
