@@ -95,8 +95,18 @@ Prezentace čte stav + reaguje na eventy; do domény posílá jen Commands
 
 Než přijde plné UI (Fáze 8), dev harness už ukazuje principy:
 - **Farma telefonů** — vykresluje se *každý* telefon (po koupi se rovnou objeví nová karta).
+- **Vizuální varianty zařízení (#8)** — karty telefonů mají tier dle pořadí (📞 Cihla → 📱 Smartfoun →
+  🎮 RGB → 🖥️ Bot Farma): rámeček/pozadí + ikonka zařízení, takže farma vizuálně „roste". Čistě
+  prezentační (doména telefony nerozlišuje); plný juice (V1/V3) zůstává pro Fázi 8.
+- **Vyjížděcí panel upgradů (#9)** — místo spodní lišty boční drawer (FAB 🛒 + odznak „kolik teď
+  koupíš"), upgrady **seskupené do kategorií** Hardware/Algorithms/Network/Bots/Brain Rot
+  (`UpgradeView.category` ← `categoryOf`). Prázdné kategorie se schovají, zamčené (#4) teaserují.
 - **Dark Mode** — upgrade 🌙 přepne celé UI do tmavého motivu (CSS proměnné + třída `html.dark`).
 - **Síťové indikátory** — upgrady ukazují `📶 ±X`, HUD `📶 spotřeba/kapacita` + ⚠️ při přetížení.
+- **Jackpot (V3 základ)** — crit swipe (upgrade 🎰 Jackpot Algorithm) vyplatí násobek, harness
+  ukáže `🎰 JACKPOT ×N` notifikaci + konfety + zvuk (event `Jackpot`). Plná slot-machine animace = Fáze 8.
+- **Produkční multiplikátor + měkký strop (#5)** — HUD ukáže `⚙️ ×<mult>`; nad prahem `🧱` (klesající
+  výnos, viz `GDD-03 §3.2` rebalance) ať „se hra od jisté fáze nezlomí".
 - **Zvuky** — syntetizované přes Web Audio (`SoundManager`): like, comment, dobrý/špatný komentář,
   pop bubliny, swipe, upgrade, hidden gem, cvakání naskakujících reakcí. Mute v horním pruhu.
 - Vše čistě jako reakce na doménové eventy / Commands — žádná herní logika v UI.

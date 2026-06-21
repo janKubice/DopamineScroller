@@ -7,7 +7,7 @@ import { SAVE_VERSION, type SaveState } from '../persistence/SaveData';
 import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
-import { UPGRADES, type UpgradeDef } from '../content/upgrades';
+import { UPGRADES, categoryOf, type UpgradeDef, type UpgradeCategory } from '../content/upgrades';
 import { PLATFORMS, DEFAULT_PLATFORM_ID, type PlatformDef } from '../content/platforms';
 import {
   Phone,
@@ -78,6 +78,8 @@ export interface UpgradeView {
   visible: boolean;
   /** Text požadavku na odemčení (jen když locked), pro UI. */
   unlockHint?: string;
+  /** Kategorie pro vyjížděcí panel (#9). */
+  category: UpgradeCategory;
 }
 
 /** View model platformy pro prezentaci (přepínač sítí). */
@@ -127,6 +129,21 @@ const JACKPOT_BASE_MULT = 5; // základní násobič jackpotu (crit) – upgrady
 const CRIT_CHANCE_CAP = 0.9; // strop šance na jackpot (ať to nikdy není 100 %)
 const OFFLINE_EFFICIENCY_CAP = 1; // offline efektivita nemůže přesáhnout 100 %
 const UNLOCK_TEASER_FRACTION = 0.5; // zamčený (jen práh Dopaminu) se v UI ukáže, když je práh z poloviny dosažen
+
+// ── Rebalance (#5): měkký strop globálního multiplikátoru produkce ──
+// Pod prahem se nic nemění (zachová early/mid balanc), nad ním se exponenciální exploze
+// stlačí v log prostoru (klesající výnos), ať se hra „od jisté fáze nezlomí".
+const PRODUCTION_SOFTCAP_LOG10 = 6; // práh ×1e6 produkce
+const PRODUCTION_COMPRESSION = 0.5; // nad prahem se každý řád počítá jen z poloviny
+
+/** Měkký strop v log10 prostoru: hodnoty ≤ 10^capLog projdou beze změny, vyšší se stlačí. */
+function softCapLog10(value: BigNumber, capLog: number, compression: number): BigNumber {
+  const log = value.log10();
+  if (!Number.isFinite(log) || log <= capLog) return value;
+  const compressed = capLog + (log - capLog) * compression;
+  const e = Math.floor(compressed);
+  return BigNumber.fromMantissaExp(Math.pow(10, compressed - e), e);
+}
 
 // ── Synergie měn (M2) ──
 const SYNERGY_REACH_K = 0.1; // Likes → Reach (× dopamin/swipe), per řád
@@ -356,9 +373,22 @@ export class Game implements Tickable {
     return OMNIPRESENCE_PER_PLATFORM * Math.max(0, this.unlockedPlatformIds.size - 1);
   }
 
-  /** Globální multiplikátor produkce z algoritmů + Brain Rot (součin dopamineMultiplier). */
-  get productionMultiplier(): BigNumber {
+  /** Surový součin dopamineMultiplier (před měkkým stropem) – pro UI/diagnostiku. */
+  get rawProductionMultiplier(): BigNumber {
     return this.effectProduct('dopamineMultiplier');
+  }
+
+  /**
+   * Globální multiplikátor produkce z algoritmů + Brain Rot (součin dopamineMultiplier),
+   * nad prahem PRODUCTION_SOFTCAP zploštěný (rebalance #5 – brzdí exponenciální explozi).
+   */
+  get productionMultiplier(): BigNumber {
+    return softCapLog10(this.rawProductionMultiplier, PRODUCTION_SOFTCAP_LOG10, PRODUCTION_COMPRESSION);
+  }
+
+  /** Je globální produkce nad měkkým stropem (UI může naznačit klesající výnos)? */
+  get isProductionSoftCapped(): boolean {
+    return this.rawProductionMultiplier.log10() > PRODUCTION_SOFTCAP_LOG10;
   }
 
   /** Multiplikátor Dopaminu/swipe bez streaku: algoritmy × Reach × Omnipresence. */
@@ -685,6 +715,7 @@ export class Game implements Tickable {
         locked: unlock.locked,
         visible: unlock.visible,
         unlockHint: unlock.locked ? unlock.hint : undefined,
+        category: categoryOf(def),
       };
     });
   }

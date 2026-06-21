@@ -3,8 +3,8 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav:** Vlna 2 (část 1) — **T6 postupné odemykání** + **nové typy efektů** hotové ·
-větev `claude/serene-goodall-af920r` · **153 testů zelených**.
+**Stav:** **Vlna 2 hotová** (T6 odemykání, nové typy efektů, panel upgradů #9, varianty zařízení #8,
+rebalance #5) · větev `claude/serene-goodall-af920r` · **158 testů zelených**. Další: Fáze 6 (Prestige).
 
 ---
 
@@ -153,11 +153,9 @@ CurrencyChanged, StreakChanged, UpgradePurchased, PlatformUnlocked/Changed, Bubb
 
 ## 9. Co dál (priorita)
 
-### 🔜 Vlna 2 (pre-prestige, požadavky hráče) — ROZPRACOVÁNO
+### ✅ Vlna 2 (pre-prestige, požadavky hráče) — HOTOVÁ
 Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider hlasitosti, #3 schování maxed,
-#5-část offline, #10 fix poskakování).
-
-**Hotovo (část 1):**
+#5-část offline, #10 fix poskakování). **Vlna 2 hotová:**
 - ✅ **#4** Postupné odemykání stromu upgradů (`UpgradeDef.unlock`: práh kumulovaného Dopaminu /
   prerekvizita; `UpgradeView.locked/visible/unlockHint`; `Game.buy` zamčené odmítá; harness
   schová/teaseruje). = backlog **T6**. Detail `GDD-03 §3.2`.
@@ -165,16 +163,16 @@ Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider h
   (rychlejší buffering), `attentionMaxMult`/`attentionRegenMult` (Pozornost), `streakCapBonus`,
   `critChance`/`critMult` (**jackpot** swipe + event `Jackpot`), `offlineEfficiencyBonus`/
   `offlineCapHours`, `bandwidthMult`. Vše čteno dynamicky přes gettery. Tabulka `GDD-03 §3.2`.
-- ✅ **#8 (část)** „Rychlejší načítání" telefonů řešeno přes `bufferSpeedMult` (zrychluje buffering
-  všech telefonů). Zbývá **vizuální** část (#8 varianty Cihla→RGB→Bot Farm) — patří k UI Fázi 8.
+- ✅ **#8** „Rychlejší načítání" přes `bufferSpeedMult` (doména) + **vizuální varianty zařízení**
+  v harnessu (📞→📱→🎮→🖥️ dle pořadí telefonu; `GDD-04 §5`). Plný juice = Fáze 8.
+- ✅ **#9** Vyjížděcí **panel upgradů** (boční drawer, FAB + odznak, kategorie Hardware/Algorithms/
+  Network/Bots/Brain Rot přes `UpgradeView.category`/`categoryOf`) místo spodní lišty.
+- ✅ **#5 rebalance** — měkký strop globálního produkčního multiplikátoru (`productionMultiplier`)
+  v log prostoru: pod prahem (×1e6) beze změny, nad ním klesající výnos (`softCapLog10`,
+  `PRODUCTION_SOFTCAP_LOG10`/`PRODUCTION_COMPRESSION`). HUD `⚙️ ×… 🧱`. „Od jisté fáze se hra nezlomí."
 
-**Zbývá:**
-- **#9** Vyjížděcí **panel upgradů** (boční drawer s kategoriemi Hardware/Algoritmy/Síť/Boti/Brain Rot)
-  místo spodní lišty. *(Čistě UI — main.ts je dočasný harness, plný UI = Fáze 8.)*
-- **#8** vizuální varianty telefonů (UI/Fáze 8).
-- **hlubší #5 rebalance** — zploštit exponenciální explozi (cap multiplikátorů / dražší křivky),
-  ať se hra „od jisté fáze nezlomí". Pozn.: nové cap konstanty (`CRIT_CHANCE_CAP`, `OFFLINE_EFFICIENCY_CAP`,
-  maxLevel u Vlny 2) už drží nové efekty v mezích — globální explozi dopamine-multiplikátorů to ale neřeší.
+> ⚠️ **UI Vlny 2 (#8/#9) je build-verified, ne vizuálně** (v prostředí nebyl prohlížeč). Doména
+> (#4/#5/#6/#7) je plně testovaná (158 zelených). Při dalším sezení projet harness očima.
 
 ### Pak: Fáze 6 — Prestige (Dopamine Overdose)
 Overdose trigger (kritický DOP/s nebo milník) → kolaps/reset → **Clarity** měna → Zen shop

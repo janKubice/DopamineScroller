@@ -7,6 +7,7 @@
 import './style.css';
 import { Game, type OfflineEarnings, type SwipeWaitMode } from './core/domain/Game';
 import { CURRENCIES, type CurrencyId } from './core/economy/currencies';
+import { UPGRADE_CATEGORIES } from './core/content/upgrades';
 import { SaveManager } from './persistence/SaveManager';
 import { SoundManager } from './audio/SoundManager';
 
@@ -58,7 +59,18 @@ app.innerHTML = `
 
   <div class="notifications" id="notifications"></div>
 
-  <footer class="upgrades" id="upgrades"></footer>
+  <!-- #9 vyjížděcí panel upgradů (místo spodní lišty) -->
+  <button class="drawer-fab" id="drawerFab" title="Upgrades">
+    🛒<span class="drawer-fab__label">Upgrades</span><span class="drawer-fab__badge" id="drawerBadge" hidden></span>
+  </button>
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <header class="drawer__head">
+      <span class="drawer__title">🛒 Upgrades</span>
+      <button class="icon-btn" id="drawerClose" title="Close" aria-label="Close">✕</button>
+    </header>
+    <div class="drawer__body" id="drawerBody"></div>
+  </aside>
 `;
 
 const hud = byId('hud');
@@ -66,7 +78,10 @@ const platformsBar = byId('platforms');
 const phonesContainer = byId('phones');
 const choices = byId('choices');
 const notifications = byId('notifications');
-const upgradesBar = byId('upgrades');
+const upgradesBar = byId('drawerBody'); // #9: tlačítka upgradů žijí v panelu
+const drawer = byId('drawer');
+const drawerBackdrop = byId('drawerBackdrop');
+const drawerBadge = byId('drawerBadge');
 
 const HUD_ORDER: CurrencyId[] = ['DOP', 'LIK', 'COM', 'SHR', 'BR'];
 
@@ -97,6 +112,19 @@ volumeSlider.addEventListener('input', () => {
   sound.setVolume(Number(volumeSlider.value));
 });
 
+// #9 Drawer open/close
+function setDrawer(open: boolean): void {
+  drawer.classList.toggle('open', open);
+  drawer.setAttribute('aria-hidden', String(!open));
+  drawerBackdrop.hidden = !open;
+}
+byId('drawerFab').addEventListener('click', () => setDrawer(!drawer.classList.contains('open')));
+byId('drawerClose').addEventListener('click', () => setDrawer(false));
+drawerBackdrop.addEventListener('click', () => setDrawer(false));
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') setDrawer(false);
+});
+
 // ── HUD ──
 function renderHud(): void {
   const money = HUD_ORDER.map(
@@ -118,9 +146,18 @@ function renderHud(): void {
       ? `<span class="hud__item hud__synergy" title="Likes→Reach, Comments→Engagement, platforms→Omnipresence">` +
         `✨ R+${reach}% E+${eng}% O+${omni}%</span>`
       : '';
+  // #5 produkční multiplikátor + náznak měkkého stropu (klesající výnos).
+  const prod = game.productionMultiplier;
+  const capped = game.isProductionSoftCapped;
+  const prodItem = prod.toNumber() > 1.0001
+    ? `<span class="hud__item ${capped ? 'hud__softcap' : ''}" ` +
+      `title="Global production multiplier${capped ? ' — soft-capped (diminishing returns)' : ''}">` +
+      `⚙️ ×${prod.format()}${capped ? ' 🧱' : ''}</span>`
+    : '';
   hud.innerHTML =
     money +
     rate +
+    prodItem +
     synergyItem +
     `<span class="hud__item">📱 ${game.phones.length}</span>` +
     `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
@@ -150,10 +187,28 @@ function syncPhones(): void {
   }
 }
 
+// #8 vizuální varianty zařízení: feed roste z cihly přes RGB až po bot farmu.
+const DEVICE_TIERS = [
+  { variant: 'brick', icon: '📞' },
+  { variant: 'smart', icon: '📱' },
+  { variant: 'rgb', icon: '🎮' },
+  { variant: 'farm', icon: '🖥️' },
+] as const;
+
+function deviceTier(id: number): (typeof DEVICE_TIERS)[number] {
+  if (id >= 10) return DEVICE_TIERS[3];
+  if (id >= 5) return DEVICE_TIERS[2];
+  if (id >= 2) return DEVICE_TIERS[1];
+  return DEVICE_TIERS[0];
+}
+
 function createCard(id: number): PhoneCard {
   const root = document.createElement('div');
-  root.className = 'phone';
-  root.innerHTML = `<div class="phone__screen"></div><div class="actions"></div>`;
+  const tier = deviceTier(id);
+  root.className = `phone phone--${tier.variant}`;
+  root.innerHTML =
+    `<div class="phone__device" title="${tier.variant}">${tier.icon}</div>` +
+    `<div class="phone__screen"></div><div class="actions"></div>`;
   phonesContainer.appendChild(root);
   const card: PhoneCard = {
     screen: root.querySelector('.phone__screen')!,
@@ -224,21 +279,31 @@ function clearChoices(): void {
   choices.innerHTML = '';
 }
 
-// ── Upgrade bar ──
+// ── Upgrade panel (#9): tlačítka seskupená do kategorií ──
+function upgradeButtonHtml(u: { id: string; icon: string; name: string; description: string }): string {
+  return `
+    <button class="upg" data-id="${u.id}" title="${escapeHtml(u.description)} (Shift = ×10)">
+      <span class="upg__icon">${u.icon}</span>
+      <span class="upg__name">${escapeHtml(u.name)}</span>
+      <span class="upg__meta">
+        <span class="upg__lvl"></span><span class="upg__cost"></span><span class="upg__net"></span>
+      </span>
+    </button>`;
+}
+
 function buildUpgrades(): void {
-  upgradesBar.innerHTML = game
-    .upgradeView()
-    .map(
-      (u) => `
-      <button class="upg" data-id="${u.id}" title="${escapeHtml(u.description)} (Shift = ×10)">
-        <span class="upg__icon">${u.icon}</span>
-        <span class="upg__name">${escapeHtml(u.name)}</span>
-        <span class="upg__meta">
-          <span class="upg__lvl"></span><span class="upg__cost"></span><span class="upg__net"></span>
-        </span>
-      </button>`,
-    )
-    .join('');
+  const byCat = new Map<string, ReturnType<typeof game.upgradeView>>();
+  for (const u of game.upgradeView()) {
+    (byCat.get(u.category) ?? byCat.set(u.category, []).get(u.category)!).push(u);
+  }
+  upgradesBar.innerHTML = UPGRADE_CATEGORIES.map((cat) => {
+    const items = byCat.get(cat.id) ?? [];
+    if (items.length === 0) return '';
+    return `<section class="drawer__cat" data-cat="${cat.id}">
+        <h3 class="drawer__cat-title">${cat.icon} ${cat.label}</h3>
+        <div class="drawer__cat-items">${items.map(upgradeButtonHtml).join('')}</div>
+      </section>`;
+  }).join('');
   for (const btn of Array.from(upgradesBar.querySelectorAll<HTMLButtonElement>('button.upg'))) {
     btn.addEventListener('click', (ev) => {
       const id = btn.dataset['id'];
@@ -249,11 +314,15 @@ function buildUpgrades(): void {
 }
 
 function refreshUpgrades(): void {
+  const visibleByCat = new Map<string, number>();
+  let affordableCount = 0;
   for (const u of game.upgradeView()) {
     const btn = upgradesBar.querySelector<HTMLButtonElement>(`button[data-id="${u.id}"]`);
     if (!btn) continue;
     // #3 vymaxované + #4 dosud neviditelné (zamčené, nedosažitelné) schováme.
-    btn.style.display = u.maxed || !u.visible ? 'none' : '';
+    const shown = !(u.maxed || !u.visible);
+    btn.style.display = shown ? '' : 'none';
+    if (shown) visibleByCat.set(u.category, (visibleByCat.get(u.category) ?? 0) + 1);
     btn.classList.toggle('is-locked', u.locked);
     const lvl = btn.querySelector('.upg__lvl')!;
     const cost = btn.querySelector('.upg__cost')!;
@@ -282,7 +351,18 @@ function refreshUpgrades(): void {
     }
     btn.disabled = !u.affordable;
     btn.classList.toggle('is-owned', u.level > 0);
+    if (u.affordable && shown) affordableCount++;
   }
+
+  // Schovej prázdné kategorie (nic viditelného).
+  for (const cat of UPGRADE_CATEGORIES) {
+    const section = upgradesBar.querySelector<HTMLElement>(`.drawer__cat[data-cat="${cat.id}"]`);
+    if (section) section.style.display = (visibleByCat.get(cat.id) ?? 0) > 0 ? '' : 'none';
+  }
+
+  // FAB odznak: kolik upgradů si můžeš teď koupit (i se zavřeným panelem).
+  drawerBadge.textContent = String(affordableCount);
+  drawerBadge.hidden = affordableCount === 0;
 }
 
 // ── Platform switcher ──

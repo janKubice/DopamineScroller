@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game, REACTION_WINDOW, expectedRarityMultiplier, OFFLINE_EFFICIENCY, MAX_OFFLINE_SECONDS } from './Game';
 import { BigNumber } from '../math/BigNumber';
 import type { PlatformDef } from '../content/platforms';
-import type { UpgradeDef } from '../content/upgrades';
+import { categoryOf, UPGRADE_CATEGORIES, type UpgradeDef } from '../content/upgrades';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -956,5 +956,73 @@ describe('Game — nové efekty (Vlna 2)', () => {
     restored.loadSave(game.serialize());
     expect(restored.upgrades.level('speed')).toBe(3);
     expect(restored.critChance).toBeCloseTo(game.critChance, 5);
+  });
+});
+
+describe('Game — rebalance měkkým stropem produkce (#5)', () => {
+  it('pod prahem se multiplikátor nemění (zachovaný early/mid balanc)', () => {
+    const game = new Game({ seed: 1, upgrades: [up('m', { type: 'dopamineMultiplier', value: 1.1 })] });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('m', 10); // 1.1^10 ≈ 2.594 (<< 1e6)
+    expect(game.isProductionSoftCapped).toBe(false);
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(Math.pow(1.1, 10), 6);
+    // capped == raw pod prahem
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(game.rawProductionMultiplier.toNumber(), 6);
+  });
+
+  it('nad prahem se exploze zploští, ale zůstává rostoucí', () => {
+    const game = new Game({ seed: 1, upgrades: [up('m', { type: 'dopamineMultiplier', value: 10 })] });
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    game.buy('m', 10); // raw = 1e10 (log 10) -> compressed 6 + (10-6)*0.5 = 8 -> 1e8
+    expect(game.isProductionSoftCapped).toBe(true);
+    expect(game.rawProductionMultiplier.log10()).toBeCloseTo(10, 6);
+    expect(game.productionMultiplier.log10()).toBeCloseTo(8, 6);
+    expect(game.productionMultiplier.lt(game.rawProductionMultiplier)).toBe(true);
+
+    const before = game.productionMultiplier.log10();
+    game.buy('m', 2); // raw log 12 -> compressed 6 + 6*0.5 = 9
+    expect(game.productionMultiplier.log10()).toBeGreaterThan(before); // monotonní
+    expect(game.productionMultiplier.log10()).toBeCloseTo(9, 6);
+  });
+
+  it('měkký strop se promítne do odhadu DOP/s (ne surová exploze)', () => {
+    const make = (levels: number): Game => {
+      const g = new Game({
+        seed: 1,
+        upgrades: [up('scroll', { type: 'autoSwipeRate', value: 1 }), up('m', { type: 'dopamineMultiplier', value: 10 })],
+      });
+      g.wallet.add('DOP', BigNumber.of(1e9));
+      g.buy('scroll', 2);
+      if (levels > 0) g.buy('m', levels);
+      return g;
+    };
+    const baseline = make(0); // productionMultiplier = 1
+    const capped = make(10); // raw 1e10, capped 1e8
+    expect(capped.isProductionSoftCapped).toBe(true);
+    // DPS škáluje s capped multiplikátorem; vše ostatní (swipy, rarita) je shodné -> poměr == multiplikátor
+    const ratio = capped.estimatedDopaminePerSecond.div(baseline.estimatedDopaminePerSecond);
+    expect(ratio.log10()).toBeCloseTo(capped.productionMultiplier.log10(), 1); // ≈ 8, ne 10
+  });
+});
+
+describe('categoryOf — kategorie upgradů (#9)', () => {
+  it('řadí podle efektu a měny', () => {
+    expect(categoryOf(up('p', { type: 'addPhone', value: 1 }))).toBe('hardware');
+    expect(categoryOf(up('b', { type: 'bandwidth', value: 1 }))).toBe('network');
+    expect(categoryOf(up('bm', { type: 'bandwidthMult', value: 2 }))).toBe('network');
+    expect(categoryOf(up('s', { type: 'autoSwipeRate', value: 1 }))).toBe('bots');
+    expect(categoryOf(up('d', { type: 'dopamineMultiplier', value: 2 }))).toBe('algorithms');
+    expect(
+      categoryOf(up('x', { type: 'dopamineMultiplier', value: 2 }, { cost: { currency: 'BR', base: 1, multiplier: 1 } })),
+    ).toBe('brainrot');
+  });
+
+  it('každý reálný upgrade má platnou kategorii a UpgradeView ji nese', () => {
+    const game = new Game({ seed: 1 });
+    const view = game.upgradeView();
+    expect(view.length).toBeGreaterThan(0);
+    for (const u of view) {
+      expect(UPGRADE_CATEGORIES.some((c) => c.id === u.category)).toBe(true);
+    }
   });
 });

@@ -30,6 +30,36 @@ export type UpgradeEffectType =
   | 'offlineCapHours' // prodlužuje strop offline těžby (hodiny, aditivně)
   | 'bandwidthMult'; // násobí celkovou kapacitu sítě
 
+/** Kategorie pro UI (vyjížděcí panel #9). Odvozená z efektu/měny – viz `categoryOf`. */
+export type UpgradeCategory = 'hardware' | 'algorithms' | 'network' | 'bots' | 'brainrot';
+
+/** Pořadí a popisky kategorií pro panel upgradů. */
+export const UPGRADE_CATEGORIES: ReadonlyArray<{ id: UpgradeCategory; label: string; icon: string }> = [
+  { id: 'hardware', label: 'Hardware', icon: '📱' },
+  { id: 'algorithms', label: 'Algorithms', icon: '🧠' },
+  { id: 'network', label: 'Network', icon: '📶' },
+  { id: 'bots', label: 'Bots', icon: '🤖' },
+  { id: 'brainrot', label: 'Brain Rot', icon: '🧟' },
+];
+
+/** Zařadí upgrade do kategorie pro UI (data-driven; Brain Rot dle měny, jinak dle efektu). */
+export function categoryOf(def: UpgradeDef): UpgradeCategory {
+  if (def.cost.currency === 'BR') return 'brainrot';
+  switch (def.effect.type) {
+    case 'addPhone':
+      return 'hardware';
+    case 'bandwidth':
+    case 'bandwidthMult':
+      return 'network';
+    case 'autoLikeRate':
+    case 'autoSwipeRate':
+    case 'autoCommentRate':
+      return 'bots';
+    default:
+      return 'algorithms';
+  }
+}
+
 /** Podmínka odemčení upgradu (postupné odemykání stromu, T6/#4). */
 export interface UpgradeUnlock {
   /** Práh kumulovaného (vydělaného) Dopaminu – viz Game.totalDopamineEarned. */
