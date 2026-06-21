@@ -406,6 +406,13 @@ function applyOverload(): void {
   }
 }
 
+// ── Chaos Level (V1): Brain Rot / scale damages the UI visually ──
+function applyChaos(): void {
+  const c = game.chaosLevel / 100; // 0..1
+  document.documentElement.style.setProperty('--chaos', c.toFixed(3));
+  document.documentElement.classList.toggle('chaotic', c > 0.5);
+}
+
 game.bus.on('PlatformUnlocked', (e) => {
   sound.upgrade();
   const p = game.platformView().find((x) => x.id === e.id);
@@ -435,6 +442,7 @@ function frame(now: number): void {
   refreshPlatforms();
   applyTheme();
   applyOverload();
+  applyChaos();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

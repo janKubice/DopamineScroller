@@ -298,14 +298,38 @@ export class Game implements Tickable {
     return this.viralityBase + this.sumEffect('virality') + this.activePlatform.viralityBonus;
   }
 
-  /** Globální multiplikátor produkce z algoritmů (součin koupených dopamineMultiplier). */
+  /** Globální multiplikátor produkce z algoritmů + Brain Rot (součin dopamineMultiplier). */
   get productionMultiplier(): BigNumber {
+    return this.effectProduct('dopamineMultiplier');
+  }
+
+  /** Násobič spotřeby sítě (downside Brain Rot upgradů, např. AI Slop ×1.5). */
+  get consumptionMultiplier(): number {
+    return this.effectProduct('consumptionMultiplier').toNumber();
+  }
+
+  /**
+   * Chaos Level 0–100 (V1): roste s počtem telefonů, Brain Rot upgrady a tierem platformy.
+   * Prezentace ho mapuje na vizuální přetížení (glitch/saturace). Viz docs/GDD-04 §V1.
+   */
+  get chaosLevel(): number {
+    let brLevels = 0;
+    for (const def of this.upgrades.all) {
+      if (def.cost.currency === 'BR') brLevels += this.upgrades.level(def.id);
+    }
+    const platformTier = Math.max(0, this.platforms.findIndex((p) => p.id === this.activePlatformId));
+    const raw = this.phones.length * 1.5 + brLevels * 6 + platformTier * 10;
+    return Math.min(100, raw);
+  }
+
+  /** Součin value^level daného multiplikativního efektu (kontroluje effect i sideEffect). */
+  private effectProduct(type: UpgradeDef['effect']['type']): BigNumber {
     let mult = BigNumber.ONE;
     for (const def of this.upgrades.all) {
-      if (def.effect.type === 'dopamineMultiplier') {
-        const lvl = this.upgrades.level(def.id);
-        if (lvl > 0) mult = mult.mul(BigNumber.of(def.effect.value).pow(lvl));
-      }
+      const lvl = this.upgrades.level(def.id);
+      if (lvl <= 0) continue;
+      if (def.effect.type === type) mult = mult.mul(BigNumber.of(def.effect.value).pow(lvl));
+      if (def.sideEffect?.type === type) mult = mult.mul(BigNumber.of(def.sideEffect.value).pow(lvl));
     }
     return mult;
   }
@@ -321,7 +345,7 @@ export class Game implements Tickable {
     return total;
   }
 
-  /** Aktuální spotřeba sítě (Mbps): telefony + boti (každý bot level). */
+  /** Aktuální spotřeba sítě (Mbps): (telefony + boti) × consumptionMultiplier (AI Slop). */
   get bandwidthConsumption(): number {
     let c = this.phones.length * this.activePlatform.bandwidthPerPhone;
     for (const def of this.upgrades.all) {
@@ -333,7 +357,7 @@ export class Game implements Tickable {
         c += BOT_BANDWIDTH_COST * this.upgrades.level(def.id);
       }
     }
-    return c;
+    return c * this.consumptionMultiplier;
   }
 
   /** Násobič rychlosti bufferingu dle zatížení sítě (1 = ok, < 1 = přetíženo). */
@@ -685,14 +709,7 @@ export class Game implements Tickable {
   }
 
   private bubbleValueMultiplier(): BigNumber {
-    let m = BigNumber.ONE;
-    for (const def of this.upgrades.all) {
-      if (def.effect.type === 'bubbleValueMult') {
-        const lvl = this.upgrades.level(def.id);
-        if (lvl > 0) m = m.mul(BigNumber.of(def.effect.value).pow(lvl));
-      }
-    }
-    return m;
+    return this.effectProduct('bubbleValueMult');
   }
 
   private rollBubbleInterval(): number {
@@ -810,16 +827,20 @@ export class Game implements Tickable {
         // čtou se dynamicky v minihře – žádná akce není potřeba.
         break;
       case 'virality':
-        // čte se dynamicky v get virality – žádná akce není potřeba.
+      case 'consumptionMultiplier':
+        // čtou se dynamicky (get virality / consumptionMultiplier) – žádná akce není potřeba.
         break;
     }
   }
 
-  /** Součet hodnot daného typu efektu napříč koupenými upgrady (value × level). */
+  /** Součet hodnot daného aditivního efektu (effect i sideEffect) × level. */
   private sumEffect(type: UpgradeDef['effect']['type']): number {
     let sum = 0;
     for (const def of this.upgrades.all) {
-      if (def.effect.type === type) sum += def.effect.value * this.upgrades.level(def.id);
+      const lvl = this.upgrades.level(def.id);
+      if (lvl <= 0) continue;
+      if (def.effect.type === type) sum += def.effect.value * lvl;
+      if (def.sideEffect?.type === type) sum += def.sideEffect.value * lvl;
     }
     return sum;
   }

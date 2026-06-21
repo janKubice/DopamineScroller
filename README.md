@@ -67,4 +67,4 @@ index.html             # vstupní bod HTML5
 - ✅ **Fáze 3 — Bandwidth:** kapacita vs. spotřeba, exp. penalizace bufferingu, síťové upgrady.
 - ✅ **Fáze 4 — Automatizace:** boti obsluhují telefony (Auto-Liker/Scroller/Commenter, škálují s počtem telefonů), viditelný postih přetížení sítě, **Pozornost (M1)** — manuál čerpá focus, boti ne.
 - ✅ **Fáze 7 — Save & Offline (předtaženo):** localStorage save + autosave, offline těžba (cap 8 h).
-- 🟡 **Fáze 5 — Obsah:** Virality/Hidden Gems (+konfety) a **platformy** (Text-It → NeuralFeed, odemykání, Brain Rot) hotové. Zbývá Brain Rot větev, synergie.
+- 🟡 **Fáze 5 — Obsah:** Virality/Hidden Gems (+konfety), **platformy** (Text-It → NeuralFeed) a **Brain Rot větev** (toxické upgrady + chaos/glitch) hotové. Zbývá synergie (M2).

@@ -144,6 +144,20 @@ Kupováno za Brain Rot. Způsobuje vizuální poškození UI (glitche, reklamy),
 - **AI Přítelkyně (beta)** — parasociální companion, „miluje" tě za engagement.
 - **Influencer Detox Čaj (MLM)** — pyramidový bot.
 
+### 4.2 Implementováno (Fáze 5)
+Kupováno za 🧟 **Brain Rot** (generuje TokTik+). Velký boost, ale **poškozuje UI** (zvyšují
+`chaosLevel` → glitch/saturace v harnessu, viz `GDD-04 §V1`).
+
+| id | Název | Cena (BR) | Efekt | Downside |
+|---|---|---|---|---|
+| `rage_bait` | 😡 Rage-Bait Generator | 20 ·1.5 | ×1.6 Dopamin/lvl | — |
+| `hate_bots` | 💢 Hate-Speech Bots | 40 ·1.4 | +3 auto-lajky/s/lvl | — |
+| `ai_slop` | 🗑️ AI Slop Factory | 150 (max 1) | ×4 Dopamin | **+50 % spotřeba sítě** (`consumptionMultiplier`) |
+| `skibidi` | 🚽 Skibidi Generator | 300 (max 1) | ×2.5 Dopamin | „mozkový věk −5 let" |
+
+> `UpgradeDef.sideEffect` umožní upgradu mít i downside (AI Slop). `chaosLevel` = f(telefony,
+> Brain Rot upgrady, tier platformy).
+
 ## 5. Prestige Obchod (Clarity Upgrades) — „Zenový obchod"
 
 Po Overdose hra spadne; hráč začíná od nuly s **Clarity**. Utratí ji před novým během:

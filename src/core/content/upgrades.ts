@@ -17,7 +17,8 @@ export type UpgradeEffectType =
   | 'bubbleUnlock' // odemkne minihru s bublinami
   | 'bubbleValueMult' // násobí hodnotu bublin
   | 'bubbleRate' // zvyšuje frekvenci bublin
-  | 'virality'; // zvyšuje šanci na vzácné posty (Hidden Gems)
+  | 'virality' // zvyšuje šanci na vzácné posty (Hidden Gems)
+  | 'consumptionMultiplier'; // násobí spotřebu sítě (downside Brain Rot upgradů)
 
 export interface UpgradeDef {
   readonly id: string;
@@ -32,6 +33,11 @@ export interface UpgradeDef {
   /** Maximální úroveň (undefined = neomezeně). */
   readonly maxLevel?: number;
   readonly effect: {
+    readonly type: UpgradeEffectType;
+    readonly value: number;
+  };
+  /** Volitelný vedlejší efekt (typicky downside, např. +spotřeba sítě). */
+  readonly sideEffect?: {
     readonly type: UpgradeEffectType;
     readonly value: number;
   };
@@ -268,5 +274,42 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '🛜',
     cost: { currency: 'DOP', base: 10000, multiplier: 1.4 },
     effect: { type: 'bandwidth', value: 100 },
+  },
+
+  // ── Brain Rot větev (za 🧟 BR z TokTik+) — velký boost, ale poškozuje UI (chaos) ──
+  {
+    id: 'rage_bait',
+    name: 'Rage-Bait Generator',
+    description: 'Turns every caption into provocative nonsense. +60% Dopamine per level.',
+    icon: '😡',
+    cost: { currency: 'BR', base: 20, multiplier: 1.5 },
+    effect: { type: 'dopamineMultiplier', value: 1.6 },
+  },
+  {
+    id: 'hate_bots',
+    name: 'Hate-Speech Bots',
+    description: 'Aggressive bots smash every interaction. +3 auto-likes/s per level.',
+    icon: '💢',
+    cost: { currency: 'BR', base: 40, multiplier: 1.4 },
+    effect: { type: 'autoLikeRate', value: 3 },
+  },
+  {
+    id: 'ai_slop',
+    name: 'AI Slop Factory',
+    description: 'Cheap AI garbage floods the feed. ×4 Dopamine, but +50% bandwidth use.',
+    icon: '🗑️',
+    cost: { currency: 'BR', base: 150, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 4 },
+    sideEffect: { type: 'consumptionMultiplier', value: 1.5 },
+  },
+  {
+    id: 'skibidi',
+    name: 'Skibidi Generator',
+    description: 'Incomprehensible Gen-Alpha brainrot. ×2.5 Dopamine. Brain age −5 years.',
+    icon: '🚽',
+    cost: { currency: 'BR', base: 300, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 2.5 },
   },
 ];

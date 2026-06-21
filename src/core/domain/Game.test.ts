@@ -560,3 +560,32 @@ describe('Game — platformy', () => {
     expect(restored.platformView().find((p) => p.id === 'b')!.unlocked).toBe(true);
   });
 });
+
+describe('Game — Brain Rot větev', () => {
+  it('Brain Rot upgrade se kupuje za BR a boostuje produkci', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.buy('rage_bait', 1)).toBe(0); // bez BR nelze
+    game.wallet.add('BR', BigNumber.of(1000));
+    const before = game.productionMultiplier.toNumber();
+    expect(game.buy('rage_bait', 1)).toBe(1);
+    expect(game.productionMultiplier.toNumber()).toBeGreaterThan(before);
+    expect(game.wallet.get('BR').toNumber()).toBeLessThan(1000);
+  });
+
+  it('AI Slop Factory: ×4 produkce, ale +50 % spotřeby sítě (downside)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('BR', BigNumber.of(1000));
+    const consBefore = game.bandwidthConsumption;
+    expect(game.buy('ai_slop', 1)).toBe(1);
+    expect(game.bandwidthConsumption).toBeCloseTo(consBefore * 1.5, 5);
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(4, 5);
+  });
+
+  it('chaosLevel roste s Brain Rot upgrady', () => {
+    const game = new Game({ seed: 1 });
+    const before = game.chaosLevel;
+    game.wallet.add('BR', BigNumber.of(100000));
+    game.buy('rage_bait', 3);
+    expect(game.chaosLevel).toBeGreaterThan(before);
+  });
+});

@@ -33,6 +33,10 @@ Prezentace ho jen **interpretuje** na efekty (žádná logika chaosu v UI):
 > **WebGL vrstva:** glitch/stroboskop/saturace běží jako fullscreen **shader pass** nad DOM
 > kompozicí (Pixi.js nebo raw WebGL). Vstup shaderu = `chaosLevel` + `dopaminePerSec`.
 
+> 🟡 **Částečně implementováno (Fáze 5):** `Game.chaosLevel` (0–100) = f(telefony, Brain Rot
+> upgrady, tier platformy). Harness ho mapuje na saturaci + hue-rotate (`--chaos`) a nad prahem
+> na jemný glitch/chromatickou aberaci (`html.chaotic`). Plný WebGL shader pass je Fáze 8.
+
 ## V2 — Diegetické dark patterns (UI prvky)
 
 Okamžitě čitelná satira poskládaná z reálných DOM prvků:
