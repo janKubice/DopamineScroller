@@ -150,7 +150,12 @@ DopaminePerSwipe ×= (1 + Reach) ; LikeYield ×= (1 + Engagement)
 GlobalMult ×= (1 + 0.08 × activePlatforms)
 ```
 Derivované staty se počítají **jednosměrně** z kumulovaných měn (žádné zacyklení).
-> Fáze 5.
+
+> ✅ **Implementováno (Fáze 5):** synergie používají `log10` zůstatku měny (klesající mezní výnos):
+> `synergyReach = 0.1·log10(LIK)` → `globalSwipeMultiplier`, `synergyEngagement = 0.1·log10(COM)`
+> → `effectiveLikeYield`, `synergyShareVirality = 0.2·log10(SHR)` → `virality`,
+> `omnipresenceBonus = 0.08·(odemčené platformy − 1)`. **Shares** se nově generují: vzácné posty
+> (rare 1 / epic 3 / legendary 10) a viral komentáře (+1). HUD: `✨ R+% E+% O+%`.
 
 ## M3 — Doomscroll Streak (kombo za aktivní hru)
 Souvislé swajpy budují multiplikátor; pasivita ho sráží.

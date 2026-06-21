@@ -589,3 +589,54 @@ describe('Game — Brain Rot větev', () => {
     expect(game.chaosLevel).toBeGreaterThan(before);
   });
 });
+
+describe('Game — synergie měn (M2)', () => {
+  it('Likes zvyšují Reach (dopamin/swipe)', () => {
+    const game = new Game({ seed: 1 });
+    const before = game.globalSwipeMultiplier.toNumber();
+    game.wallet.add('LIK', BigNumber.of(1e6));
+    expect(game.synergyReach).toBeGreaterThan(0);
+    expect(game.globalSwipeMultiplier.toNumber()).toBeGreaterThan(before);
+  });
+
+  it('Comments zvyšují Engagement (víc LIK za lajk)', () => {
+    const base = new Game({ seed: 1 });
+    advanceToReady(base);
+    const baseYield = base.like(1)!.toNumber();
+
+    const boosted = new Game({ seed: 1 });
+    boosted.wallet.add('COM', BigNumber.of(1e6));
+    advanceToReady(boosted);
+    expect(boosted.like(1)!.toNumber()).toBeGreaterThan(baseYield);
+  });
+
+  it('Shares zvyšují viralitu', () => {
+    const game = new Game({ seed: 1 });
+    const before = game.virality;
+    game.wallet.add('SHR', BigNumber.of(1e6));
+    expect(game.virality).toBeGreaterThan(before);
+  });
+
+  it('vzácný post generuje Shares', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    game.buy('third_eye', 30); // vysoká virality -> vzácné posty
+    let guard = 0;
+    while (game.wallet.get('SHR').isZero() && guard < 300) {
+      advanceToReady(game);
+      const p = game.phones[0]!;
+      if (p.isReady) game.swipe(p.id);
+      guard++;
+    }
+    expect(game.wallet.get('SHR').isPositive()).toBe(true);
+  });
+
+  it('odemčené platformy navíc dávají Omnipresence', () => {
+    const platforms: PlatformDef[] = [
+      { id: 'a', name: 'A', icon: '🅰️', basePostValue: 1, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+      { id: 'b', name: 'B', icon: '🅱️', basePostValue: 1, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+    ];
+    const game = new Game({ seed: 1, platforms });
+    expect(game.omnipresenceBonus).toBeGreaterThan(0);
+  });
+});

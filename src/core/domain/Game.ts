@@ -113,6 +113,13 @@ const ATTENTION_COST_BUBBLE = 4;
 const FOCUS_MIN = 0.35; // minimální násobič odměny manuálu při vyčerpané pozornosti
 const FOCUS_THRESHOLD = 0.35; // pod tímto podílem pozornosti se penalizace plně projeví
 
+// ── Synergie měn (M2) ──
+const SYNERGY_REACH_K = 0.1; // Likes → Reach (× dopamin/swipe), per řád
+const SYNERGY_ENGAGEMENT_K = 0.1; // Comments → Engagement (× yield lajku), per řád
+const SYNERGY_SHARE_VIRALITY_K = 0.2; // Shares → Virality, per řád
+const OMNIPRESENCE_PER_PLATFORM = 0.08; // globální bonus za každou odemčenou platformu navíc
+const SHARE_BY_RARITY: Readonly<Record<Rarity, number>> = { common: 0, rare: 1, epic: 3, legendary: 10 };
+
 /** Doba, po kterou reakce na komentář „naskakuje" (liky/disliky v čase). */
 export const REACTION_WINDOW = 4; // s
 
@@ -293,14 +300,54 @@ export class Game implements Tickable {
     this.attentionValue = Math.max(0, this.attentionValue - cost);
   }
 
-  /** Virality (M5/§5): šance na vzácné posty. Base + upgrady (Third Eye, Fake News). */
+  /** Virality (M5/§5): šance na vzácné posty. Base + upgrady + platforma + Shares (M2). */
   get virality(): number {
-    return this.viralityBase + this.sumEffect('virality') + this.activePlatform.viralityBonus;
+    return (
+      this.viralityBase +
+      this.sumEffect('virality') +
+      this.activePlatform.viralityBonus +
+      this.synergyShareVirality
+    );
+  }
+
+  // ── Synergie měn (M2): nahromaděné LCS dávají bonusy s klesajícím mezním výnosem ──
+  /** log10 zůstatku měny (0 pro nulu/podjednotku) – základ pro synergie. */
+  private logOf(id: CurrencyId): number {
+    const v = this.wallet.get(id);
+    return v.isZero() ? 0 : Math.max(0, v.log10());
+  }
+  /** Likes → Reach: bonus k Dopaminu/swipe. */
+  get synergyReach(): number {
+    return SYNERGY_REACH_K * this.logOf('LIK');
+  }
+  /** Comments → Engagement: bonus k yieldu lajku. */
+  get synergyEngagement(): number {
+    return SYNERGY_ENGAGEMENT_K * this.logOf('COM');
+  }
+  /** Shares → Virality: bonus k viralitě. */
+  get synergyShareVirality(): number {
+    return SYNERGY_SHARE_VIRALITY_K * this.logOf('SHR');
+  }
+  /** Omnipresence: bonus za každou odemčenou platformu navíc. */
+  get omnipresenceBonus(): number {
+    return OMNIPRESENCE_PER_PLATFORM * Math.max(0, this.unlockedPlatformIds.size - 1);
   }
 
   /** Globální multiplikátor produkce z algoritmů + Brain Rot (součin dopamineMultiplier). */
   get productionMultiplier(): BigNumber {
     return this.effectProduct('dopamineMultiplier');
+  }
+
+  /** Multiplikátor Dopaminu/swipe bez streaku: algoritmy × Reach × Omnipresence. */
+  get globalSwipeMultiplier(): BigNumber {
+    return this.productionMultiplier
+      .mul(BigNumber.of(1 + this.synergyReach))
+      .mul(BigNumber.of(1 + this.omnipresenceBonus));
+  }
+
+  /** Efektivní yield lajku: base × (1 + Engagement). */
+  get effectiveLikeYield(): BigNumber {
+    return this.likeYield.mul(BigNumber.of(1 + this.synergyEngagement));
   }
 
   /** Násobič spotřeby sítě (downside Brain Rot upgradů, např. AI Slop ×1.5). */
@@ -395,7 +442,7 @@ export class Game implements Tickable {
   get estimatedDopaminePerSecond(): BigNumber {
     const swipes = this.effectiveSwipesPerSecond();
     if (swipes <= 0) return BigNumber.ZERO;
-    return this.basePostValue.mul(this.productionMultiplier)
+    return this.basePostValue.mul(this.globalSwipeMultiplier)
       .mul(BigNumber.of(expectedRarityMultiplier(this.virality)))
       .mul(BigNumber.of(swipes));
   }
@@ -423,6 +470,9 @@ export class Game implements Tickable {
     // Některé platformy (TokTik+) pasivně hnijou mozek.
     const br = this.activePlatform.brainRotPerSwipe;
     if (br > 0) this.credit('BR', BigNumber.of(br));
+    // Vzácné posty se sdílejí → Shares (M2 synergie: Shares → Virality).
+    const shares = SHARE_BY_RARITY[result.rarity];
+    if (shares > 0) this.credit('SHR', BigNumber.of(shares));
     this.bumpStreak();
     this.bus.emit('SwipeResolved', { phoneId, dopamine: result.dopamine, rarity: result.rarity });
     if (result.rarity !== 'common') {
@@ -434,7 +484,7 @@ export class Game implements Tickable {
   like(phoneId: number, manual = true): BigNumber | null {
     const phone = this.getPhone(phoneId);
     if (!phone) return null;
-    const gained = phone.like(this.likeYield);
+    const gained = phone.like(this.effectiveLikeYield);
     if (!gained) return null;
     if (manual) this.spendAttention(ATTENTION_COST_LIKE);
     this.credit('LIK', gained);
@@ -626,7 +676,7 @@ export class Game implements Tickable {
       };
     }
 
-    const perSwipe = this.basePostValue.mul(this.productionMultiplier).mul(
+    const perSwipe = this.basePostValue.mul(this.globalSwipeMultiplier).mul(
       BigNumber.of(expectedRarityMultiplier(this.virality)),
     );
     const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * capped));
@@ -795,8 +845,12 @@ export class Game implements Tickable {
         this.bus.emit('CurrencyChanged', { id: 'DOP', total: this.wallet.get('DOP') });
         this.bus.emit('CurrencyChanged', { id: 'LIK', total: this.wallet.get('LIK') });
         this.bus.emit('CurrencyChanged', { id: 'BR', total: this.wallet.get('BR') });
-        if (r.result.outcome === 'viral') this.bumpStreak();
-        else if (r.result.outcome === 'flop') this.dampStreak();
+        if (r.result.outcome === 'viral') {
+          this.bumpStreak();
+          this.credit('SHR', BigNumber.ONE); // viral komentář se sdílí (M2)
+        } else if (r.result.outcome === 'flop') {
+          this.dampStreak();
+        }
         this.bus.emit('CommentResolved', { phoneId: r.phoneId, result: r.result });
         this.reactions.splice(i, 1);
       }
@@ -854,7 +908,7 @@ export class Game implements Tickable {
   }
 
   private globalMultiplier(): BigNumber {
-    return BigNumber.of(this.streakValue).mul(this.productionMultiplier);
+    return BigNumber.of(this.streakValue).mul(this.globalSwipeMultiplier);
   }
 
   private reactionContext(): ReactionContext {

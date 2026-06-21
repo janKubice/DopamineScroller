@@ -53,7 +53,7 @@ const choices = byId('choices');
 const notifications = byId('notifications');
 const upgradesBar = byId('upgrades');
 
-const HUD_ORDER: CurrencyId[] = ['DOP', 'LIK', 'COM', 'BR'];
+const HUD_ORDER: CurrencyId[] = ['DOP', 'LIK', 'COM', 'SHR', 'BR'];
 
 function byId(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -81,9 +81,18 @@ function renderHud(): void {
   const focusItem =
     `<span class="hud__item ${fatigued ? 'hud__fatigued' : ''}" ` +
     `title="Attention — manual actions cost focus; bots don't">🎯 ${att}%${fatigued ? ' 😵' : ''}</span>`;
+  const reach = Math.round(game.synergyReach * 100);
+  const eng = Math.round(game.synergyEngagement * 100);
+  const omni = Math.round(game.omnipresenceBonus * 100);
+  const synergyItem =
+    reach + eng + omni > 0
+      ? `<span class="hud__item hud__synergy" title="Likes→Reach, Comments→Engagement, platforms→Omnipresence">` +
+        `✨ R+${reach}% E+${eng}% O+${omni}%</span>`
+      : '';
   hud.innerHTML =
     money +
     rate +
+    synergyItem +
     `<span class="hud__item">📱 ${game.phones.length}</span>` +
     `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
     `📶 ${game.bandwidthConsumption}/${game.totalBandwidth}${overload ? ' ⚠️' : ''}</span>` +
