@@ -5,7 +5,7 @@
  * and synthesized sound — all driven by domain events / commands.
  */
 import './style.css';
-import { Game, type OfflineEarnings } from './core/domain/Game';
+import { Game, type OfflineEarnings, type SwipeWaitMode } from './core/domain/Game';
 import { CURRENCIES, type CurrencyId } from './core/economy/currencies';
 import { SaveManager } from './persistence/SaveManager';
 import { SoundManager } from './audio/SoundManager';
@@ -29,7 +29,22 @@ const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <header class="topbar">
     <div class="brand"><span class="brand__logo">🧠</span><span>Dopamine Scroller</span></div>
-    <button class="icon-btn topbar__settings" id="mute" title="Sound on/off" aria-label="Sound">🔊</button>
+    <div class="topbar__controls">
+      <label class="ctl" title="What the Auto-Scroller waits for before swiping">
+        🤖
+        <select id="waitfor">
+          <option value="none">swipe now</option>
+          <option value="like">wait for 👍</option>
+          <option value="comment">wait for 💬</option>
+          <option value="both">wait for both</option>
+        </select>
+      </label>
+      <label class="ctl" title="Volume">
+        🔊
+        <input type="range" id="volume" min="0" max="1" step="0.05" />
+      </label>
+      <button class="icon-btn topbar__settings" id="mute" title="Mute" aria-label="Mute">🔊</button>
+    </div>
   </header>
 
   <div class="hud" id="hud"></div>
@@ -66,6 +81,20 @@ const muteBtn = byId('mute');
 muteBtn.addEventListener('click', () => {
   sound.setEnabled(!sound.isEnabled);
   muteBtn.textContent = sound.isEnabled ? '🔊' : '🔇';
+});
+
+// #1 Auto-Scroller wait mode
+const waitSelect = document.querySelector<HTMLSelectElement>('#waitfor')!;
+waitSelect.value = game.swipeWaitFor;
+waitSelect.addEventListener('change', () => {
+  game.setSwipeWaitFor(waitSelect.value as SwipeWaitMode);
+});
+
+// #2 Volume slider
+const volumeSlider = document.querySelector<HTMLInputElement>('#volume')!;
+volumeSlider.value = String(sound.masterVolume);
+volumeSlider.addEventListener('input', () => {
+  sound.setVolume(Number(volumeSlider.value));
 });
 
 // ── HUD ──
@@ -237,7 +266,9 @@ function refreshUpgrades(): void {
     } else {
       net.textContent = '';
     }
-    btn.disabled = u.maxed || !u.affordable;
+    // #3 vymaxované upgrady schováme (odkup je hotový)
+    btn.style.display = u.maxed ? 'none' : '';
+    btn.disabled = !u.affordable;
     btn.classList.toggle('is-owned', u.level > 0);
   }
 }

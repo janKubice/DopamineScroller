@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Game, REACTION_WINDOW, expectedRarityMultiplier } from './Game';
+import { Game, REACTION_WINDOW, expectedRarityMultiplier, OFFLINE_EFFICIENCY, MAX_OFFLINE_SECONDS } from './Game';
 import { BigNumber } from '../math/BigNumber';
 import type { PlatformDef } from '../content/platforms';
 
@@ -292,7 +292,7 @@ describe('Game — boti & offline', () => {
     const before = game.wallet.get('DOP').toNumber();
     const earn = game.computeOfflineEarnings(3600);
     expect(earn.seconds).toBe(3600);
-    expect(earn.dopamine.toNumber() / (est * 3600)).toBeCloseTo(1, 5);
+    expect(earn.dopamine.toNumber() / (est * 3600)).toBeCloseTo(OFFLINE_EFFICIENCY, 5);
     expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before);
   });
 
@@ -304,13 +304,13 @@ describe('Game — boti & offline', () => {
     expect(earn.dopamine.isZero()).toBe(true);
   });
 
-  it('offline je zastropované na 8 h', () => {
+  it('offline je zastropované', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(1e6));
     game.buy('auto_scroller', 1);
     const earn = game.computeOfflineEarnings(10 * 24 * 3600); // 10 dní
     expect(earn.capped).toBe(true);
-    expect(earn.seconds).toBe(8 * 3600);
+    expect(earn.seconds).toBe(MAX_OFFLINE_SECONDS);
   });
 });
 
@@ -638,5 +638,31 @@ describe('Game — synergie měn (M2)', () => {
     ];
     const game = new Game({ seed: 1, platforms });
     expect(game.omnipresenceBonus).toBeGreaterThan(0);
+  });
+});
+
+describe('Game — auto-scroller čekání (T4)', () => {
+  it('waitFor=like neswipne nelajknutý post (bez auto-likeru, do pojistky)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('fiber', 1); // dost sítě
+    game.buy('auto_scroller', 5);
+    game.setSwipeWaitFor('like');
+    for (let i = 0; i < 60; i++) game.advance(0.1); // 6 s: ready ~3 s, readyElapsed ~3 s < MAX_AUTO_WAIT
+    expect(game.phones[0]!.isReady).toBe(true); // čeká na like, neswipnuto
+    expect(game.phones[0]!.liked).toBe(false);
+  });
+
+  it('waitFor=like swipne až po lajku (s auto-likerem)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('fiber', 1);
+    game.buy('auto_scroller', 5);
+    game.buy('auto_liker', 5);
+    game.setSwipeWaitFor('like');
+    const before = game.wallet.get('DOP').toNumber();
+    for (let i = 0; i < 120; i++) game.advance(0.1);
+    expect(game.wallet.get('LIK').toNumber()).toBeGreaterThan(0); // lajky proběhly
+    expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before); // pak swipe -> DOP
   });
 });

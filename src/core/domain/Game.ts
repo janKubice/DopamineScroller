@@ -91,8 +91,10 @@ const STREAK_DECAY = 0.2; // za sekundu
 const BASE_BANDWIDTH = 3; // Mbps – domácí Wi-Fi na startu
 const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
 // Base Dopamin/post a spotřeba sítě na telefon přicházejí z aktivní platformy.
-const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
+export const MAX_OFFLINE_SECONDS = 4 * 3600; // strop offline těžby (4 h)
+export const OFFLINE_EFFICIENCY = 0.5; // boti jsou offline jen z poloviny efektivní
 const AUTO_SCROLL_GRACE = 0.4; // s – jak dlouho post „dýchá" než ho auto-scroller swipne
+const MAX_AUTO_WAIT = 8; // s – pojistka: auto-scroller swipne i bez splnění podmínky čekání
 const MAX_BOT_BUDGET = 3; // strop nahromaděných bot-akcí (anti-hoarding při nečinnosti)
 
 // ── Minihra: dopaminové bubliny (odemyká se upgradem) ──
@@ -168,6 +170,9 @@ interface ActiveBubble {
   remaining: number;
 }
 
+/** Na co má auto-scroller čekat, než post swipne (M1/T4). */
+export type SwipeWaitMode = 'none' | 'like' | 'comment' | 'both';
+
 export interface GameOptions {
   seed?: number;
   comments?: CommentPool;
@@ -199,6 +204,7 @@ export class Game implements Tickable {
   private autoLikeBudget = 0;
   private autoSwipeBudget = 0;
   private autoCommentBudget = 0;
+  private swipeWaitForMode: SwipeWaitMode = 'none';
   private attentionValue = MAX_ATTENTION;
   private streakValue = STREAK_FLOOR;
   private viralityBase = 0;
@@ -421,6 +427,30 @@ export class Game implements Tickable {
   }
   get autoCommentRate(): number {
     return this.sumEffect('autoCommentRate');
+  }
+
+  /** Na co auto-scroller čeká, než swipne (T4). */
+  get swipeWaitFor(): SwipeWaitMode {
+    return this.swipeWaitForMode;
+  }
+  setSwipeWaitFor(mode: SwipeWaitMode): void {
+    this.swipeWaitForMode = mode;
+  }
+
+  /** Splňuje post na telefonu podmínku čekání auto-scrolleru? */
+  private canAutoSwipe(phone: Phone): boolean {
+    if (!phone.isReady || phone.readyElapsed < AUTO_SCROLL_GRACE) return false;
+    if (phone.readyElapsed >= MAX_AUTO_WAIT) return true; // pojistka proti zaseknutí
+    switch (this.swipeWaitForMode) {
+      case 'like':
+        return phone.liked;
+      case 'comment':
+        return phone.commented;
+      case 'both':
+        return phone.liked && phone.commented;
+      default:
+        return true;
+    }
   }
 
   /**
@@ -676,13 +706,15 @@ export class Game implements Tickable {
       };
     }
 
+    // Offline jsou boti jen z poloviny efektivní (OFFLINE_EFFICIENCY).
+    const eff = capped * OFFLINE_EFFICIENCY;
     const perSwipe = this.basePostValue.mul(this.globalSwipeMultiplier).mul(
       BigNumber.of(expectedRarityMultiplier(this.virality)),
     );
-    const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * capped));
+    const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * eff));
     // Lajky/komentáře nemůžou překročit počet vyrobených postů.
-    const likes = this.likeYield.mul(BigNumber.of(Math.min(this.autoLikeRate, swipesPerSec) * capped));
-    const comments = BigNumber.of(Math.min(this.autoCommentRate, swipesPerSec) * capped);
+    const likes = this.likeYield.mul(BigNumber.of(Math.min(this.autoLikeRate, swipesPerSec) * eff));
+    const comments = BigNumber.of(Math.min(this.autoCommentRate, swipesPerSec) * eff);
 
     if (dopamine.isPositive()) this.credit('DOP', dopamine);
     if (likes.isPositive()) this.credit('LIK', likes);
@@ -796,7 +828,7 @@ export class Game implements Tickable {
       this.autoCommentBudget -= 1;
     }
     while (this.autoSwipeBudget >= 1) {
-      const phone = this.phones.find((p) => p.isReady && p.readyElapsed >= AUTO_SCROLL_GRACE);
+      const phone = this.phones.find((p) => this.canAutoSwipe(p));
       if (!phone) break;
       this.swipe(phone.id, false);
       this.autoSwipeBudget -= 1;

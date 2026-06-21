@@ -20,15 +20,12 @@ tolerovat nudu** (vazba na M1 Pozornost: nadměrné ťukání během loadu můž
 Focus — satirický downside). Implementovat jako modul přes rozhraní `IMiniGameResolver` (M4).
 Limit bonusu na jeden buffer, ať to není zneužitelné.
 
-### ⬜ T4 — Auto-Scroller: nastavitelné čekání  `[Fáze 5/6]`
-Hráč nastaví, na co má auto-scroller **čekat, než swipne**: nic / like / komentář / oboje.
-Doména: konfig `swipeWaitFor: 'none' | 'like' | 'comment' | 'both'`; auto-scroller pak swipne
-jen posty, které podmínku splňují (`p.liked` / `p.commented`). UI: přepínač. Pozn.: dnes je
-pevná prodleva `AUTO_SCROLL_GRACE` — tohle ji nahradí podmínkou na dokončení interakcí.
+### ✅ T4 — Auto-Scroller: nastavitelné čekání  `[hotovo]`
+`Game.setSwipeWaitFor('none'|'like'|'comment'|'both')` + `canAutoSwipe` — auto-scroller swipne
+jen posty splňující podmínku (s pojistkou `MAX_AUTO_WAIT`, ať se nezasekne). UI: select v pruhu.
 
-### ⬜ T5 — Schovat vymaxované upgrady  `[Fáze 8 UI]`
-Vymaxované (`maxed`) upgrady přesunout do skládacího „Maxed" okýnka/sekce, ať spodní lišta
-není zahlcená. `UpgradeView.maxed` už existuje — stačí v UI filtrovat/skládat.
+### ✅ T5 — Schovat vymaxované upgrady  `[hotovo]`
+Vymaxované upgrady se v liště skryjí (`display:none` dle `UpgradeView.maxed`). Plný panel = T6/#9.
 
 ### ⬜ T6 — Postupné odemykání stromu upgradů  `[Fáze 5/6]`
 Upgrady se neukazují všechny hned, ale **odemykají postupně** (prahy kumulovaného Dopaminu

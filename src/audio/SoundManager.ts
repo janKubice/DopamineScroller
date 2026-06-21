@@ -8,6 +8,7 @@ type AudioCtor = typeof AudioContext;
 export class SoundManager {
   private ctx: AudioContext | null = null;
   private enabled = true;
+  private volume = 0.7; // master hlasitost 0..1
   private readonly last: Record<string, number> = {};
 
   /** Throttle: vrátí false, pokud daný zvuk hrál nedávno (anti-spam u botů). */
@@ -37,6 +38,15 @@ export class SoundManager {
     return this.enabled;
   }
 
+  /** Nastaví master hlasitost (0..1). */
+  setVolume(v: number): void {
+    this.volume = Math.min(1, Math.max(0, v));
+  }
+
+  get masterVolume(): number {
+    return this.volume;
+  }
+
   private ensureCtx(): void {
     if (this.ctx) return;
     const Ctor: AudioCtor | undefined =
@@ -53,7 +63,7 @@ export class SoundManager {
 
   /** Jeden krátký tón s obálkou. */
   private blip(freq: number, dur: number, type: OscillatorType = 'sine', peak = 0.08): void {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     this.ensureCtx();
     const ctx = this.ctx;
     if (!ctx) return;
@@ -63,7 +73,7 @@ export class SoundManager {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, now);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(peak, now + 0.005);
+    gain.gain.linearRampToValueAtTime(peak * this.volume, now + 0.005);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     osc.connect(gain).connect(ctx.destination);
     osc.start(now);

@@ -64,6 +64,37 @@ body {
   font-size: 22px;
 }
 
+.topbar__controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ctl {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ctl select {
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ctl input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 /* ── HUD ── */
 .hud {
   display: flex;
@@ -224,6 +255,7 @@ body {
   justify-content: center;
   gap: 10px;
   margin-top: 12px;
+  min-height: 48px; /* #10: rezervace výšky, ať se karta neposkakuje při ready/buffering */
 }
 
 .icon-btn {
