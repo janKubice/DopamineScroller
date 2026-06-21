@@ -101,6 +101,55 @@ body {
   }
 }
 
+/* ── Platform switcher ── */
+.platforms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 0 16px 8px;
+}
+
+.platform {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+.platform:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.platform.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  font-weight: 700;
+}
+
+.platform.is-locked {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.platform__icon {
+  font-size: 18px;
+}
+.platform__name {
+  font-size: 13px;
+}
+.platform__lock {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Stage / phone farm ── */
 .stage {
   flex: 1;

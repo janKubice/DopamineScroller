@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Game, REACTION_WINDOW, expectedRarityMultiplier } from './Game';
 import { BigNumber } from '../math/BigNumber';
+import type { PlatformDef } from '../content/platforms';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -491,5 +492,71 @@ describe('Game — Pozornost (M1)', () => {
     }
     expect(game.attention).toBeLessThan(game.maxAttention);
     expect(game.focusFactor).toBeLessThan(1);
+  });
+});
+
+describe('Game — platformy', () => {
+  const platforms: PlatformDef[] = [
+    { id: 'a', name: 'A', icon: '🅰️', basePostValue: 10, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+    { id: 'b', name: 'B', icon: '🅱️', basePostValue: 50, bandwidthPerPhone: 3, viralityBonus: 0, brainRotPerSwipe: 2, unlockAtDopamine: 30 },
+  ];
+
+  /** Odemkne platformu 'b' tím, že nechá boty vydělat dost Dopaminu. */
+  function unlockB(game: Game): void {
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_scroller', 10);
+    game.buy('fiber', 2);
+    for (let i = 0; i < 5; i++) game.addPhone();
+    for (let i = 0; i < 300; i++) game.advance(0.1);
+  }
+
+  it('startuje na první platformě, ostatní zamčené', () => {
+    const game = new Game({ seed: 1, platforms });
+    expect(game.activePlatform.id).toBe('a');
+    const view = game.platformView();
+    expect(view.find((p) => p.id === 'a')!.unlocked).toBe(true);
+    expect(view.find((p) => p.id === 'b')!.unlocked).toBe(false);
+  });
+
+  it('na zamčenou platformu nelze přepnout', () => {
+    const game = new Game({ seed: 1, platforms });
+    expect(game.setPlatform('b')).toBe(false);
+    expect(game.activePlatform.id).toBe('a');
+  });
+
+  it('platforma určuje base Dopamin/post', () => {
+    const game = new Game({ seed: 1, platforms });
+    expect(game.basePostValue.toNumber()).toBe(10);
+  });
+
+  it('vydělaný Dopamin odemkne další platformu', () => {
+    const game = new Game({ seed: 1, platforms });
+    let unlocked = false;
+    game.bus.on('PlatformUnlocked', (e) => {
+      if (e.id === 'b') unlocked = true;
+    });
+    unlockB(game);
+    expect(unlocked).toBe(true);
+    expect(game.setPlatform('b')).toBe(true);
+    expect(game.activePlatform.id).toBe('b');
+  });
+
+  it('platforma s brainRotPerSwipe generuje Brain Rot', () => {
+    const game = new Game({ seed: 1, platforms });
+    unlockB(game);
+    expect(game.setPlatform('b')).toBe(true);
+    const before = game.wallet.get('BR').toNumber();
+    for (let i = 0; i < 100; i++) game.advance(0.1); // boti swipují na 'b'
+    expect(game.wallet.get('BR').toNumber()).toBeGreaterThan(before);
+  });
+
+  it('save/load obnoví aktivní platformu i odemčení', () => {
+    const game = new Game({ seed: 1, platforms });
+    unlockB(game);
+    game.setPlatform('b');
+    const restored = new Game({ seed: 2, platforms });
+    restored.loadSave(game.serialize());
+    expect(restored.activePlatform.id).toBe('b');
+    expect(restored.platformView().find((p) => p.id === 'b')!.unlocked).toBe(true);
   });
 });

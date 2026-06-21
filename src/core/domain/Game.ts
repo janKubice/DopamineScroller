@@ -8,6 +8,7 @@ import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
 import { UPGRADES, type UpgradeDef } from '../content/upgrades';
+import { PLATFORMS, DEFAULT_PLATFORM_ID, type PlatformDef } from '../content/platforms';
 import {
   Phone,
   DEFAULT_PHONE_CONFIG,
@@ -39,6 +40,8 @@ export interface GameEvents extends EventMap {
   CurrencyChanged: { id: CurrencyId; total: BigNumber };
   StreakChanged: { value: number };
   UpgradePurchased: { id: string; level: number };
+  PlatformUnlocked: { id: string };
+  PlatformChanged: { id: string };
   /** Minihra: vyskočila dopaminová bublina ke kliknutí. */
   BubbleSpawned: { id: number; value: BigNumber };
   BubblePopped: { id: number; value: BigNumber };
@@ -70,15 +73,24 @@ export interface UpgradeView {
   networkKind: 'uses' | 'adds' | 'none';
 }
 
+/** View model platformy pro prezentaci (přepínač sítí). */
+export interface PlatformView {
+  id: string;
+  name: string;
+  icon: string;
+  unlocked: boolean;
+  active: boolean;
+  unlockAt: BigNumber;
+}
+
 // ── Balanc konstanty (Fáze 9 je externalizuje do dat) ──
 const STREAK_FLOOR = 1;
 const STREAK_MAX = 3;
 const STREAK_STEP = 0.1;
 const STREAK_DECAY = 0.2; // za sekundu
-const BASE_POST_VALUE = BigNumber.of(1); // Text-It: nízký base Dopamin
 const BASE_BANDWIDTH = 3; // Mbps – domácí Wi-Fi na startu
-const PHONE_BANDWIDTH_COST = 1; // Mbps spotřeby na jeden telefon
 const BOT_BANDWIDTH_COST = 0.5; // Mbps spotřeby na úroveň bota
+// Base Dopamin/post a spotřeba sítě na telefon přicházejí z aktivní platformy.
 const MAX_OFFLINE_SECONDS = 8 * 3600; // strop offline těžby (8 h)
 const AUTO_SCROLL_GRACE = 0.4; // s – jak dlouho post „dýchá" než ho auto-scroller swipne
 const MAX_BOT_BUDGET = 3; // strop nahromaděných bot-akcí (anti-hoarding při nečinnosti)
@@ -153,6 +165,7 @@ export interface GameOptions {
   seed?: number;
   comments?: CommentPool;
   upgrades?: readonly UpgradeDef[];
+  platforms?: readonly PlatformDef[];
   phoneConfig?: PhoneConfig;
 }
 
@@ -185,13 +198,30 @@ export class Game implements Tickable {
   private nextPhoneId = 1;
   private readonly likeYield = BigNumber.ONE;
 
+  private readonly platforms: readonly PlatformDef[];
+  private activePlatformId: string;
+  private unlockedPlatformIds = new Set<string>();
+  private totalDopamine = BigNumber.ZERO; // kumulovaný Dopamin za běh (odemyká platformy)
+
   constructor(options: GameOptions = {}) {
     this.rng = new Rng(options.seed ?? 1);
     this.comments = options.comments ?? CommentPool.default();
     this.upgrades = new UpgradeStore(options.upgrades ?? UPGRADES);
+    this.platforms = options.platforms ?? PLATFORMS;
+    this.activePlatformId = this.platforms[0]?.id ?? DEFAULT_PLATFORM_ID;
+    this.refreshUnlockedPlatforms();
     this.clock = new GameClock(this);
     this.addPhone(options.phoneConfig ?? DEFAULT_PHONE_CONFIG);
     this.nextBubbleIn = this.rollBubbleInterval();
+  }
+
+  /** Doplní set odemčených platforem dle kumulovaného Dopaminu (bez eventů). */
+  private refreshUnlockedPlatforms(): void {
+    for (const p of this.platforms) {
+      if (this.totalDopamine.gte(BigNumber.of(p.unlockAtDopamine))) {
+        this.unlockedPlatformIds.add(p.id);
+      }
+    }
   }
 
   addPhone(config: PhoneConfig = DEFAULT_PHONE_CONFIG): Phone {
@@ -206,6 +236,43 @@ export class Game implements Tickable {
 
   get dopamine(): BigNumber {
     return this.wallet.get('DOP');
+  }
+
+  /** Aktivní platforma (sociální síť). */
+  get activePlatform(): PlatformDef {
+    return this.platforms.find((p) => p.id === this.activePlatformId) ?? this.platforms[0]!;
+  }
+
+  /** Base Dopamin/post podle aktivní platformy. */
+  get basePostValue(): BigNumber {
+    return BigNumber.of(this.activePlatform.basePostValue);
+  }
+
+  /** Kumulovaný Dopamin za běh (odemyká platformy, později Clarity). */
+  get totalDopamineEarned(): BigNumber {
+    return this.totalDopamine;
+  }
+
+  /** Přepne aktivní platformu (jen pokud je odemčená). */
+  setPlatform(id: string): boolean {
+    if (!this.unlockedPlatformIds.has(id)) return false;
+    if (this.activePlatformId !== id) {
+      this.activePlatformId = id;
+      this.bus.emit('PlatformChanged', { id });
+    }
+    return true;
+  }
+
+  /** View model platforem pro přepínač. */
+  platformView(): PlatformView[] {
+    return this.platforms.map((p) => ({
+      id: p.id,
+      name: p.name,
+      icon: p.icon,
+      unlocked: this.unlockedPlatformIds.has(p.id),
+      active: p.id === this.activePlatformId,
+      unlockAt: BigNumber.of(p.unlockAtDopamine),
+    }));
   }
 
   /** Pozornost (M1): regenerující se lidský zdroj. */
@@ -228,7 +295,7 @@ export class Game implements Tickable {
 
   /** Virality (M5/§5): šance na vzácné posty. Base + upgrady (Third Eye, Fake News). */
   get virality(): number {
-    return this.viralityBase + this.sumEffect('virality');
+    return this.viralityBase + this.sumEffect('virality') + this.activePlatform.viralityBonus;
   }
 
   /** Globální multiplikátor produkce z algoritmů (součin koupených dopamineMultiplier). */
@@ -256,7 +323,7 @@ export class Game implements Tickable {
 
   /** Aktuální spotřeba sítě (Mbps): telefony + boti (každý bot level). */
   get bandwidthConsumption(): number {
-    let c = this.phones.length * PHONE_BANDWIDTH_COST;
+    let c = this.phones.length * this.activePlatform.bandwidthPerPhone;
     for (const def of this.upgrades.all) {
       if (
         def.effect.type === 'autoLikeRate' ||
@@ -304,7 +371,7 @@ export class Game implements Tickable {
   get estimatedDopaminePerSecond(): BigNumber {
     const swipes = this.effectiveSwipesPerSecond();
     if (swipes <= 0) return BigNumber.ZERO;
-    return BASE_POST_VALUE.mul(this.productionMultiplier)
+    return this.basePostValue.mul(this.productionMultiplier)
       .mul(BigNumber.of(expectedRarityMultiplier(this.virality)))
       .mul(BigNumber.of(swipes));
   }
@@ -329,6 +396,9 @@ export class Game implements Tickable {
     if (!result) return null;
     if (manual) this.spendAttention(ATTENTION_COST_SWIPE);
     this.credit('DOP', result.dopamine);
+    // Některé platformy (TokTik+) pasivně hnijou mozek.
+    const br = this.activePlatform.brainRotPerSwipe;
+    if (br > 0) this.credit('BR', BigNumber.of(br));
     this.bumpStreak();
     this.bus.emit('SwipeResolved', { phoneId, dopamine: result.dopamine, rarity: result.rarity });
     if (result.rarity !== 'common') {
@@ -456,7 +526,7 @@ export class Game implements Tickable {
   private networkImpact(def: UpgradeDef): { delta: number; kind: 'uses' | 'adds' | 'none' } {
     switch (def.effect.type) {
       case 'addPhone':
-        return { delta: PHONE_BANDWIDTH_COST * def.effect.value, kind: 'uses' };
+        return { delta: this.activePlatform.bandwidthPerPhone * def.effect.value, kind: 'uses' };
       case 'autoLikeRate':
       case 'autoSwipeRate':
       case 'autoCommentRate':
@@ -479,6 +549,8 @@ export class Game implements Tickable {
       streak: this.streakValue,
       virality: this.viralityBase,
       phoneCount: this.phones.length,
+      activePlatform: this.activePlatformId,
+      totalDopamine: this.totalDopamine.serialize(),
     };
   }
 
@@ -498,6 +570,14 @@ export class Game implements Tickable {
     this.autoSwipeBudget = 0;
     this.autoCommentBudget = 0;
     this.attentionValue = MAX_ATTENTION;
+    // Platformy: obnov kumulovaný Dopamin, dopočítej odemčené, ověř aktivní.
+    this.totalDopamine = data.totalDopamine ? BigNumber.deserialize(data.totalDopamine) : BigNumber.ZERO;
+    this.unlockedPlatformIds = new Set<string>();
+    this.refreshUnlockedPlatforms();
+    const wantedPlatform = data.activePlatform ?? this.platforms[0]?.id ?? DEFAULT_PLATFORM_ID;
+    this.activePlatformId = this.unlockedPlatformIds.has(wantedPlatform)
+      ? wantedPlatform
+      : (this.platforms[0]?.id ?? DEFAULT_PLATFORM_ID);
     this.phones.length = 0;
     this.nextPhoneId = 1;
     const count = Math.max(1, Math.floor(data.phoneCount));
@@ -522,7 +602,7 @@ export class Game implements Tickable {
       };
     }
 
-    const perSwipe = BASE_POST_VALUE.mul(this.productionMultiplier).mul(
+    const perSwipe = this.basePostValue.mul(this.productionMultiplier).mul(
       BigNumber.of(expectedRarityMultiplier(this.virality)),
     );
     const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * capped));
@@ -552,6 +632,17 @@ export class Game implements Tickable {
     this.processBots(dt);
     this.advanceReactions(dt);
     this.advanceBubbles(dt);
+    this.checkPlatformUnlocks();
+  }
+
+  /** Odemkne platformy, jejichž práh kumulovaného Dopaminu byl právě překročen. */
+  private checkPlatformUnlocks(): void {
+    for (const p of this.platforms) {
+      if (!this.unlockedPlatformIds.has(p.id) && this.totalDopamine.gte(BigNumber.of(p.unlockAtDopamine))) {
+        this.unlockedPlatformIds.add(p.id);
+        this.bus.emit('PlatformUnlocked', { id: p.id });
+      }
+    }
   }
 
   /** Je minihra s bublinami odemčená? (upgrade Dopamine Detector) */
@@ -588,7 +679,7 @@ export class Game implements Tickable {
 
   /** Hodnota bubliny ≈ 2 swipy × upgrady hodnoty. */
   private bubbleValue(): BigNumber {
-    const perSwipe = BASE_POST_VALUE.mul(this.productionMultiplier);
+    const perSwipe = this.basePostValue.mul(this.productionMultiplier);
     const raw = perSwipe.mul(BigNumber.of(BUBBLE_REWARD_FACTOR)).mul(this.bubbleValueMultiplier());
     return BigNumber.max(BigNumber.of(BUBBLE_MIN_REWARD), raw);
   }
@@ -734,7 +825,7 @@ export class Game implements Tickable {
   }
 
   private generatePost(): Post {
-    return { rarity: rollRarity(this.virality, this.rng), baseValue: BASE_POST_VALUE };
+    return { rarity: rollRarity(this.virality, this.rng), baseValue: this.basePostValue };
   }
 
   private getPhone(id: number): Phone | undefined {
@@ -754,6 +845,7 @@ export class Game implements Tickable {
 
   private credit(id: CurrencyId, amount: BigNumber): void {
     this.wallet.add(id, amount);
+    if (id === 'DOP') this.totalDopamine = this.totalDopamine.add(amount);
     this.bus.emit('CurrencyChanged', { id, total: this.wallet.get(id) });
   }
 

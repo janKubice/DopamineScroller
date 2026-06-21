@@ -34,6 +34,8 @@ app.innerHTML = `
 
   <div class="hud" id="hud"></div>
 
+  <div class="platforms" id="platforms"></div>
+
   <main class="stage">
     <div class="phones" id="phones"></div>
     <div class="choices" id="choices"></div>
@@ -45,6 +47,7 @@ app.innerHTML = `
 `;
 
 const hud = byId('hud');
+const platformsBar = byId('platforms');
 const phonesContainer = byId('phones');
 const choices = byId('choices');
 const notifications = byId('notifications');
@@ -127,7 +130,7 @@ function renderCard(id: number, card: PhoneCard): void {
   const p = game.phones.find((x) => x.id === id);
   if (!p) return;
   if (p.isReady) {
-    card.screen.innerHTML = `<div class="post">📱<br /><small>${p.post!.rarity}</small></div>`;
+    card.screen.innerHTML = `<div class="post">${game.activePlatform.icon}<br /><small>${p.post!.rarity}</small></div>`;
     card.actions.innerHTML = `
       <button class="icon-btn act" data-act="like" title="Like">👍</button>
       <button class="icon-btn act" data-act="comment" title="Comment">💬</button>
@@ -227,6 +230,39 @@ function refreshUpgrades(): void {
     }
     btn.disabled = u.maxed || !u.affordable;
     btn.classList.toggle('is-owned', u.level > 0);
+  }
+}
+
+// ── Platform switcher ──
+function buildPlatforms(): void {
+  platformsBar.innerHTML = game
+    .platformView()
+    .map(
+      (p) => `
+      <button class="platform" data-id="${p.id}">
+        <span class="platform__icon">${p.icon}</span>
+        <span class="platform__name">${escapeHtml(p.name)}</span>
+        <span class="platform__lock"></span>
+      </button>`,
+    )
+    .join('');
+  for (const btn of Array.from(platformsBar.querySelectorAll<HTMLButtonElement>('button.platform'))) {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset['id'];
+      if (id) game.setPlatform(id);
+    });
+  }
+  refreshPlatforms();
+}
+
+function refreshPlatforms(): void {
+  for (const p of game.platformView()) {
+    const btn = platformsBar.querySelector<HTMLButtonElement>(`button[data-id="${p.id}"]`);
+    if (!btn) continue;
+    btn.classList.toggle('is-active', p.active);
+    btn.classList.toggle('is-locked', !p.unlocked);
+    btn.disabled = !p.unlocked;
+    btn.querySelector('.platform__lock')!.textContent = p.unlocked ? '' : `🔒 ${p.unlockAt.format()}`;
   }
 }
 
@@ -370,8 +406,19 @@ function applyOverload(): void {
   }
 }
 
+game.bus.on('PlatformUnlocked', (e) => {
+  sound.upgrade();
+  const p = game.platformView().find((x) => x.id === e.id);
+  pushNote(`🔓 New platform unlocked: ${p?.name ?? e.id}`, 'note--offline', 4500);
+});
+game.bus.on('PlatformChanged', (e) => {
+  const p = game.platformView().find((x) => x.id === e.id);
+  pushNote(`📲 Switched to ${p?.name ?? e.id}`, 'note--like', 1800);
+});
+
 // ── Boot ──
 buildUpgrades();
+buildPlatforms();
 applyTheme();
 if (offlineResult) showOfflineToast(offlineResult);
 saver.startAutosave(() => game.serialize(), 5000);
@@ -385,6 +432,7 @@ function frame(now: number): void {
   renderHud();
   syncPhones();
   refreshUpgrades();
+  refreshPlatforms();
   applyTheme();
   applyOverload();
   requestAnimationFrame(frame);

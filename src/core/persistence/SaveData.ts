@@ -15,4 +15,7 @@ export interface SaveState {
   streak: number;
   virality: number;
   phoneCount: number;
+  // přidáno ve Fázi 5 (volitelné kvůli zpětné kompatibilitě se staršími save)
+  activePlatform?: string;
+  totalDopamine?: { m: number; e: number };
 }

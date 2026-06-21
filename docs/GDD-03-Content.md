@@ -26,6 +26,23 @@ feedu a nároky na síť.
 | **Diskuze.cz** | Sekce pod článkem | Vrchol boomer rage-baitu. Maximální Brain Rot. Ryze český vtip. |
 | **Vlákno** | Threads | Zoufalý klon Insta-Klamu „aby pobral zbytek pozornosti". |
 
+### 1.2 Implementovaný systém platforem (Fáze 5)
+Data v `src/core/content/platforms.ts` (`PlatformDef`). Platforma určuje **base Dopamin/post**,
+**spotřebu sítě/telefon**, **virality bonus** a **Brain Rot/swipe**. Odemyká se kumulovaným
+Dopaminem (`Game.totalDopamineEarned`); hráč přepíná aktivní (`Game.setPlatform`, eventy
+`PlatformUnlocked`/`PlatformChanged`).
+
+| Platforma | base DOP | Mbps/tel. | virality | BR/swipe | odemkne při |
+|---|---|---|---|---|---|
+| 🔤 Text-It | 1 | 1.0 | 0 | 0 | 0 |
+| 📘 Fakebook | 4 | 1.5 | 0 | 0 | 500 |
+| 📸 Insta-Klam | 12 | 2.5 | +0.5 | 0 | 10 000 |
+| 🎵 TokTik | 40 | 4.0 | +0.3 | 0.5 | 250 000 |
+| 🧠 NeuralFeed | 150 | 8.0 | +1.0 | 2.0 | 5 000 000 |
+
+> Vyšší platforma = velký skok zisku, ale větší nároky na síť a (TokTik+) generuje **Brain Rot**
+> (temná měna pro budoucí toxickou větev). Harness: přepínač pod HUD, feed mění ikonu dle platformy.
+
 ## 2. Hardware & Infrastruktura
 
 ### 2.1 Zařízení (Phones)
