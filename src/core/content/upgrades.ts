@@ -18,7 +18,27 @@ export type UpgradeEffectType =
   | 'bubbleValueMult' // násobí hodnotu bublin
   | 'bubbleRate' // zvyšuje frekvenci bublin
   | 'virality' // zvyšuje šanci na vzácné posty (Hidden Gems)
-  | 'consumptionMultiplier'; // násobí spotřebu sítě (downside Brain Rot upgradů)
+  | 'consumptionMultiplier' // násobí spotřebu sítě (downside Brain Rot upgradů)
+  // ── Vlna 2 (pre-prestige): nové typy efektů, ne jen procenta ──
+  | 'bufferSpeedMult' // násobí rychlost bufferingu (rychlejší načítání postů)
+  | 'attentionMaxMult' // násobí maximum Pozornosti (M1)
+  | 'attentionRegenMult' // násobí regeneraci Pozornosti
+  | 'streakCapBonus' // zvyšuje strop streaku (aditivně)
+  | 'critChance' // šance na jackpot swipe (aditivně, 0–1)
+  | 'critMult' // přidává k násobiči jackpotu (aditivně)
+  | 'offlineEfficiencyBonus' // přidává k efektivitě offline těžby (aditivně, 0–1)
+  | 'offlineCapHours' // prodlužuje strop offline těžby (hodiny, aditivně)
+  | 'bandwidthMult'; // násobí celkovou kapacitu sítě
+
+/** Podmínka odemčení upgradu (postupné odemykání stromu, T6/#4). */
+export interface UpgradeUnlock {
+  /** Práh kumulovaného (vydělaného) Dopaminu – viz Game.totalDopamineEarned. */
+  readonly dopamine?: number;
+  /** Prerekvizitní upgrade (musí být vlastněn aspoň na `requiresLevel`). */
+  readonly requires?: string;
+  /** Minimální úroveň prerekvizity (default 1). */
+  readonly requiresLevel?: number;
+}
 
 export interface UpgradeDef {
   readonly id: string;
@@ -41,10 +61,12 @@ export interface UpgradeDef {
     readonly type: UpgradeEffectType;
     readonly value: number;
   };
+  /** Volitelná podmínka odemčení (jinak je upgrade dostupný od začátku). */
+  readonly unlock?: UpgradeUnlock;
 }
 
 export const UPGRADES: readonly UpgradeDef[] = [
-  // ── Early game (levné, hned je co kupovat) ──
+  // ── Early game (levné, hned je co kupovat – záměrně bez zámků) ──
   {
     id: 'energy_drink',
     name: 'Energy Drink',
@@ -128,6 +150,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 150, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.25 },
+    unlock: { dopamine: 150 },
   },
   {
     id: 'auto_liker',
@@ -160,6 +183,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '💧',
     cost: { currency: 'DOP', base: 120, multiplier: 1.4 },
     effect: { type: 'bubbleValueMult', value: 1.25 },
+    unlock: { requires: 'dopamine_detector' },
   },
   {
     id: 'faster_bubbles',
@@ -168,6 +192,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '⏩',
     cost: { currency: 'DOP', base: 200, multiplier: 1.4 },
     effect: { type: 'bubbleRate', value: 1.2 },
+    unlock: { requires: 'dopamine_detector' },
   },
 
   // ── Mid game ──
@@ -179,6 +204,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 300, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.3 },
+    unlock: { dopamine: 250 },
   },
   {
     id: 'ring_light',
@@ -188,6 +214,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 400, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.2 },
+    unlock: { dopamine: 400 },
   },
   {
     id: 'echo_chamber',
@@ -206,6 +233,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 600, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.35 },
+    unlock: { dopamine: 700 },
   },
   {
     id: 'adsl',
@@ -214,6 +242,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '☎️',
     cost: { currency: 'DOP', base: 800, multiplier: 1.3 },
     effect: { type: 'bandwidth', value: 10 },
+    unlock: { dopamine: 700 },
   },
   {
     id: 'go_viral',
@@ -222,6 +251,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '📈',
     cost: { currency: 'DOP', base: 1000, multiplier: 1.5 },
     effect: { type: 'dopamineMultiplier', value: 1.25 },
+    unlock: { dopamine: 1200 },
   },
   {
     id: 'third_eye',
@@ -239,6 +269,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 1500, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.5 },
+    unlock: { dopamine: 2500 },
   },
   {
     id: 'kitten_boost',
@@ -248,6 +279,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 2500, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 2 },
+    unlock: { dopamine: 5000 },
   },
   {
     id: 'algorithm_whisperer',
@@ -257,6 +289,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 3000, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.4 },
+    unlock: { dopamine: 8000 },
   },
   {
     id: 'fake_news',
@@ -276,6 +309,105 @@ export const UPGRADES: readonly UpgradeDef[] = [
     effect: { type: 'bandwidth', value: 100 },
   },
 
+  // ── Vlna 2 — nové typy efektů (pre-prestige „wow" upgrady, postupně odemykané) ──
+  {
+    id: 'gigabit_thumbs',
+    name: 'Gigabit Thumbs',
+    description: '+15% buffering speed per level. Posts load faster — feed never rests.',
+    icon: '⚡',
+    cost: { currency: 'DOP', base: 500, multiplier: 1.4 },
+    effect: { type: 'bufferSpeedMult', value: 1.15 },
+    unlock: { dopamine: 350 },
+  },
+  {
+    id: 'predictive_preload',
+    name: 'Predictive Preload',
+    description: 'The app loads the next outrage before you ask. +25% buffering speed per level.',
+    icon: '🔮',
+    cost: { currency: 'DOP', base: 9000, multiplier: 1.5 },
+    effect: { type: 'bufferSpeedMult', value: 1.25 },
+    unlock: { dopamine: 12000, requires: 'gigabit_thumbs', requiresLevel: 3 },
+  },
+  {
+    id: 'meditation_app',
+    name: 'Meditation App (Premium)',
+    description: 'Ironically used to scroll longer. +50% Attention regen per level.',
+    icon: '🧘',
+    cost: { currency: 'DOP', base: 600, multiplier: 1.45 },
+    effect: { type: 'attentionRegenMult', value: 1.5 },
+    unlock: { dopamine: 500 },
+  },
+  {
+    id: 'adderall',
+    name: 'Off-Brand Adderall',
+    description: "+40% max Attention per level. Don't ask where it's from.",
+    icon: '💊',
+    cost: { currency: 'DOP', base: 1200, multiplier: 1.5 },
+    maxLevel: 8,
+    effect: { type: 'attentionMaxMult', value: 1.4 },
+    unlock: { dopamine: 900 },
+  },
+  {
+    id: 'doomscroll_stamina',
+    name: 'Doomscroll Stamina',
+    description: '+0.5 to the streak ceiling per level. Longer combos, deeper hole.',
+    icon: '🥵',
+    cost: { currency: 'DOP', base: 2000, multiplier: 1.6 },
+    maxLevel: 6,
+    effect: { type: 'streakCapBonus', value: 0.5 },
+    unlock: { dopamine: 1800 },
+  },
+  {
+    id: 'jackpot_algo',
+    name: 'Jackpot Algorithm',
+    description: '+5% chance per level that a swipe is a JACKPOT (×5+ Dopamine). Slot-machine brain.',
+    icon: '🎰',
+    cost: { currency: 'DOP', base: 3000, multiplier: 1.55 },
+    maxLevel: 12,
+    effect: { type: 'critChance', value: 0.05 },
+    unlock: { dopamine: 2500 },
+  },
+  {
+    id: 'mega_jackpot',
+    name: 'Mega-Jackpot Mode',
+    description: '+3 to the jackpot payout multiplier per level. When it hits, it HITS.',
+    icon: '💰',
+    cost: { currency: 'DOP', base: 18000, multiplier: 1.6 },
+    maxLevel: 8,
+    effect: { type: 'critMult', value: 3 },
+    unlock: { dopamine: 20000, requires: 'jackpot_algo', requiresLevel: 2 },
+  },
+  {
+    id: 'time_dilation',
+    name: 'Time-Dilation Field',
+    description: '+10% offline mining efficiency per level (your bots try harder while away).',
+    icon: '⏳',
+    cost: { currency: 'DOP', base: 5000, multiplier: 1.5 },
+    maxLevel: 5,
+    effect: { type: 'offlineEfficiencyBonus', value: 0.1 },
+    unlock: { dopamine: 5000 },
+  },
+  {
+    id: 'cloud_backup',
+    name: 'Cloud Backup',
+    description: '+2h to the offline mining cap per level. Scroll even in your sleep.',
+    icon: '☁️',
+    cost: { currency: 'DOP', base: 7000, multiplier: 1.5 },
+    maxLevel: 6,
+    effect: { type: 'offlineCapHours', value: 2 },
+    unlock: { dopamine: 6000 },
+  },
+  {
+    id: 'data_center',
+    name: 'Personal Data Center',
+    description: '×2 total bandwidth capacity per level. Industrial-scale doomscrolling.',
+    icon: '🏢',
+    cost: { currency: 'DOP', base: 25000, multiplier: 1.7 },
+    maxLevel: 4,
+    effect: { type: 'bandwidthMult', value: 2 },
+    unlock: { dopamine: 30000, requires: 'fiber' },
+  },
+
   // ── Brain Rot větev (za 🧟 BR z TokTik+) — velký boost, ale poškozuje UI (chaos) ──
   {
     id: 'rage_bait',
@@ -292,6 +424,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     icon: '💢',
     cost: { currency: 'BR', base: 40, multiplier: 1.4 },
     effect: { type: 'autoLikeRate', value: 3 },
+    unlock: { requires: 'rage_bait' },
   },
   {
     id: 'ai_slop',
@@ -304,6 +437,16 @@ export const UPGRADES: readonly UpgradeDef[] = [
     sideEffect: { type: 'consumptionMultiplier', value: 1.5 },
   },
   {
+    id: 'neural_implant',
+    name: 'Neural Implant (Beta)',
+    description: 'Brain-to-feed interface. ×2 Attention regen per level. Chaos intensifies.',
+    icon: '🧠',
+    cost: { currency: 'BR', base: 80, multiplier: 1.5 },
+    maxLevel: 5,
+    effect: { type: 'attentionRegenMult', value: 2 },
+    unlock: { requires: 'ai_slop' },
+  },
+  {
     id: 'skibidi',
     name: 'Skibidi Generator',
     description: 'Incomprehensible Gen-Alpha brainrot. ×2.5 Dopamine. Brain age −5 years.',
@@ -311,5 +454,6 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'BR', base: 300, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 2.5 },
+    unlock: { requires: 'ai_slop' },
   },
 ];

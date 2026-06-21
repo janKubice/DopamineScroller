@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game, REACTION_WINDOW, expectedRarityMultiplier, OFFLINE_EFFICIENCY, MAX_OFFLINE_SECONDS } from './Game';
 import { BigNumber } from '../math/BigNumber';
 import type { PlatformDef } from '../content/platforms';
+import type { UpgradeDef } from '../content/upgrades';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -664,5 +665,296 @@ describe('Game — auto-scroller čekání (T4)', () => {
     for (let i = 0; i < 120; i++) game.advance(0.1);
     expect(game.wallet.get('LIK').toNumber()).toBeGreaterThan(0); // lajky proběhly
     expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before); // pak swipe -> DOP
+  });
+});
+
+// ── Vlna 2 (pre-prestige) ─────────────────────────────────────────────────────
+
+/** Minimální UpgradeDef pro izolované testy efektů (levný, multiplier 1 = fixní cena). */
+function up(id: string, effect: UpgradeDef['effect'], extra: Partial<UpgradeDef> = {}): UpgradeDef {
+  return {
+    id,
+    name: id,
+    description: id,
+    icon: '🔧',
+    cost: { currency: 'DOP', base: 1, multiplier: 1 },
+    effect,
+    ...extra,
+  };
+}
+
+/** Posune telefon do ready a swipne ho (pro vydělání Dopaminu / nabuzení streaku). */
+function readyAndSwipe(game: Game, id = 1): void {
+  for (let i = 0; i < 200; i++) {
+    const p = game.phones.find((x) => x.id === id);
+    if (p?.isReady) break;
+    game.advance(0.1);
+  }
+  game.swipe(id);
+}
+
+describe('Game — postupné odemykání upgradů (T6)', () => {
+  it('prerekvizitní upgrade je zamčený, dokud není koupena prerekvizita', () => {
+    const upgrades = [
+      up('base', { type: 'dopamineMultiplier', value: 2 }, { maxLevel: 1 }),
+      up('gated', { type: 'dopamineMultiplier', value: 2 }, { maxLevel: 1, unlock: { requires: 'base' } }),
+    ];
+    const game = new Game({ seed: 1, upgrades });
+    game.wallet.add('DOP', BigNumber.of(1000));
+
+    expect(game.isUnlocked('gated')).toBe(false);
+    expect(game.buy('gated', 1)).toBe(0); // zamčeno -> nelze koupit
+
+    const lockedView = game.upgradeView().find((u) => u.id === 'gated')!;
+    expect(lockedView.locked).toBe(true);
+    expect(lockedView.visible).toBe(false); // prereq nesplněn -> schováno
+    expect(lockedView.affordable).toBe(false);
+
+    expect(game.buy('base', 1)).toBe(1);
+    expect(game.isUnlocked('gated')).toBe(true);
+    expect(game.buy('gated', 1)).toBe(1);
+    const view = game.upgradeView().find((u) => u.id === 'gated')!;
+    expect(view.locked).toBe(false);
+    expect(view.visible).toBe(true);
+  });
+
+  it('prerekvizita může vyžadovat konkrétní úroveň', () => {
+    const upgrades = [
+      up('base', { type: 'dopamineMultiplier', value: 1.1 }),
+      up('gated', { type: 'dopamineMultiplier', value: 2 }, {
+        maxLevel: 1,
+        unlock: { requires: 'base', requiresLevel: 3 },
+      }),
+    ];
+    const game = new Game({ seed: 1, upgrades });
+    game.wallet.add('DOP', BigNumber.of(1000));
+    game.buy('base', 2);
+    expect(game.isUnlocked('gated')).toBe(false); // jen Lv 2
+    game.buy('base', 1);
+    expect(game.isUnlocked('gated')).toBe(true); // Lv 3
+  });
+
+  it('práh Dopaminu používá VYDĚLANÝ (kumulovaný) Dopamin, ne aktuální zůstatek', () => {
+    const upgrades = [up('gated', { type: 'dopamineMultiplier', value: 2 }, { unlock: { dopamine: 250 } })];
+    const platforms: PlatformDef[] = [
+      { id: 'x', name: 'X', icon: '✖️', basePostValue: 100, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+    ];
+    const game = new Game({ seed: 1, upgrades, platforms });
+    game.wallet.add('DOP', BigNumber.of(1e6)); // má peníze, ale nevydělal je
+
+    expect(game.totalDopamineEarned.isZero()).toBe(true);
+    expect(game.isUnlocked('gated')).toBe(false);
+    expect(game.buy('gated', 1)).toBe(0); // zůstatek nestačí na odemčení
+    expect(game.upgradeView().find((u) => u.id === 'gated')!.visible).toBe(false);
+
+    // Vyděláme přes půlku prahu (teaser), ale ne celý.
+    while (game.totalDopamineEarned.toNumber() < 250 * 0.5) readyAndSwipe(game);
+    if (game.totalDopamineEarned.toNumber() < 250) {
+      const teaser = game.upgradeView().find((u) => u.id === 'gated')!;
+      expect(teaser.locked).toBe(true);
+      expect(teaser.visible).toBe(true); // teaser „brzy"
+      expect(teaser.unlockHint).toBeTruthy();
+    }
+
+    // Vyděláme přes práh -> odemčeno a koupitelné.
+    while (game.totalDopamineEarned.toNumber() < 250) readyAndSwipe(game);
+    expect(game.isUnlocked('gated')).toBe(true);
+    expect(game.buy('gated', 1)).toBe(1);
+  });
+
+  it('reálná data: bubble upgrady jsou zamčené dokud není Dopamine Detector', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e5));
+    expect(game.isUnlocked('bigger_hits')).toBe(false);
+    expect(game.buy('bigger_hits', 1)).toBe(0);
+    expect(game.upgradeView().find((u) => u.id === 'bigger_hits')!.visible).toBe(false);
+
+    game.buy('dopamine_detector', 1);
+    expect(game.isUnlocked('bigger_hits')).toBe(true);
+    expect(game.upgradeView().find((u) => u.id === 'bigger_hits')!.visible).toBe(true);
+    expect(game.buy('bigger_hits', 1)).toBe(1);
+  });
+
+  it('reálná data: threshold upgrade nelze koupit z napumpovaného zůstatku', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    expect(game.buy('gigabit_thumbs', 1)).toBe(0); // práh 350 vydělaného Dopaminu nesplněn
+    expect(game.upgradeView().find((u) => u.id === 'gigabit_thumbs')!.locked).toBe(true);
+  });
+
+  it('reálná data: threshold upgrade se odemkne vyděláním Dopaminu (boti)', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('auto_scroller', 10);
+    game.buy('fiber', 1);
+    for (let i = 0; i < 12; i++) game.addPhone();
+    expect(game.isUnlocked('gigabit_thumbs')).toBe(false);
+    for (let i = 0; i < 5000 && game.totalDopamineEarned.toNumber() < 350; i++) game.advance(0.1);
+    expect(game.totalDopamineEarned.toNumber()).toBeGreaterThanOrEqual(350);
+    expect(game.isUnlocked('gigabit_thumbs')).toBe(true);
+    expect(game.buy('gigabit_thumbs', 1)).toBe(1);
+  });
+});
+
+describe('Game — nové efekty (Vlna 2)', () => {
+  it('bufferSpeedMult zrychlí načítání postů', () => {
+    const slow = new Game({ seed: 1 });
+    slow.advance(1.5); // půlka bufferTime -> ještě ne ready
+    expect(slow.phones[0]!.isReady).toBe(false);
+
+    const fast = new Game({ seed: 1, upgrades: [up('speed', { type: 'bufferSpeedMult', value: 2 })] });
+    fast.wallet.add('DOP', BigNumber.of(100));
+    fast.buy('speed', 1);
+    expect(fast.bufferSpeedMultiplier).toBe(2);
+    fast.advance(1.5); // ×2 rychlost -> ready za polovinu času
+    expect(fast.phones[0]!.isReady).toBe(true);
+  });
+
+  it('attentionMaxMult zvýší maximum Pozornosti', () => {
+    const game = new Game({ seed: 1, upgrades: [up('att', { type: 'attentionMaxMult', value: 1.5 })] });
+    game.wallet.add('DOP', BigNumber.of(100));
+    const base = game.maxAttention;
+    game.buy('att', 2); // ×1.5^2 = ×2.25
+    expect(game.maxAttention).toBeCloseTo(base * 2.25, 5);
+  });
+
+  it('attentionRegenMult zrychlí regeneraci Pozornosti', () => {
+    const measure = (game: Game): number => {
+      game.advance(3); // ready, pozornost na maximu
+      game.swipe(1); // utratí pozornost
+      const low = game.attention;
+      game.advance(0.2);
+      return game.attention - low;
+    };
+    const base = new Game({ seed: 1 });
+    const boosted = new Game({ seed: 1, upgrades: [up('regen', { type: 'attentionRegenMult', value: 3 })] });
+    boosted.wallet.add('DOP', BigNumber.of(100));
+    boosted.buy('regen', 1);
+    expect(boosted.attentionRegenMultiplier).toBe(3);
+    expect(measure(boosted)).toBeGreaterThan(measure(base));
+  });
+
+  it('streakCapBonus zvedne strop streaku nad základ', () => {
+    const game = new Game({
+      seed: 1,
+      upgrades: [
+        up('cap', { type: 'streakCapBonus', value: 2 }, { maxLevel: 1 }),
+        up('bw', { type: 'bandwidth', value: 1000 }),
+      ],
+    });
+    game.wallet.add('DOP', BigNumber.of(1e4));
+    expect(game.streakMax).toBe(3);
+    game.buy('cap', 1);
+    expect(game.streakMax).toBe(5);
+
+    game.buy('bw', 1);
+    for (let i = 0; i < 40; i++) game.addPhone(); // hodně telefonů = swipy v jednom ticku
+    for (let s = 0; s < 6; s++) {
+      game.advance(3.2); // všechny ready
+      for (const p of game.phones) if (p.isReady) game.swipe(p.id);
+    }
+    expect(game.streak).toBeGreaterThan(3); // přesáhlo původní strop -> bonus funguje
+  });
+
+  it('jackpot (crit): bez upgradu nikdy, s upgradem swipy občas vyplatí násobek', () => {
+    const noCrit = new Game({ seed: 1 });
+    expect(noCrit.critChance).toBe(0);
+
+    const game = new Game({ seed: 1, upgrades: [up('jack', { type: 'critChance', value: 0.05 }, { maxLevel: 20 })] });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('jack', 18); // 0.9 (po zastropování)
+    expect(game.critChance).toBeCloseTo(0.9, 5);
+
+    let jackpot: { dopamine: BigNumber; multiplier: number } | null = null;
+    game.bus.on('Jackpot', (e) => {
+      if (!jackpot) jackpot = e;
+    });
+    for (let i = 0; i < 40 && jackpot === null; i++) readyAndSwipe(game);
+    expect(jackpot).not.toBeNull();
+    expect((jackpot as unknown as { multiplier: number }).multiplier).toBe(5); // base bez Mega-Jackpotu
+  });
+
+  it('critMult (Mega-Jackpot) zvýší výplatu jackpotu', () => {
+    const game = new Game({ seed: 1, upgrades: [up('mega', { type: 'critMult', value: 3 }, { maxLevel: 8 })] });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    expect(game.critMultiplier).toBe(5); // základ
+    game.buy('mega', 2); // +6
+    expect(game.critMultiplier).toBe(11);
+  });
+
+  it('offlineEfficiencyBonus zvýší offline výnos', () => {
+    const make = (extra: UpgradeDef[]): Game => {
+      const g = new Game({ seed: 1, upgrades: [up('scroll', { type: 'autoSwipeRate', value: 1 }), ...extra] });
+      g.wallet.add('DOP', BigNumber.of(1e6));
+      g.buy('scroll', 2);
+      return g;
+    };
+    const base = make([]);
+    const boosted = make([up('eff', { type: 'offlineEfficiencyBonus', value: 0.1 }, { maxLevel: 5 })]);
+    boosted.buy('eff', 5); // +0.5 -> efektivita 1.0
+    expect(base.offlineEfficiency).toBeCloseTo(0.5, 5);
+    expect(boosted.offlineEfficiency).toBeCloseTo(1.0, 5);
+
+    const baseEarn = base.computeOfflineEarnings(3600).dopamine.toNumber();
+    const boostEarn = boosted.computeOfflineEarnings(3600).dopamine.toNumber();
+    expect(boostEarn / baseEarn).toBeCloseTo(2, 5); // 1.0 / 0.5
+  });
+
+  it('offlineCapHours prodlouží strop offline těžby', () => {
+    const game = new Game({
+      seed: 1,
+      upgrades: [
+        up('scroll', { type: 'autoSwipeRate', value: 1 }),
+        up('cap', { type: 'offlineCapHours', value: 2 }, { maxLevel: 6 }),
+      ],
+    });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('scroll', 1);
+    expect(game.maxOfflineSeconds).toBe(MAX_OFFLINE_SECONDS);
+    game.buy('cap', 3); // +6 h
+    expect(game.maxOfflineSeconds).toBe(MAX_OFFLINE_SECONDS + 6 * 3600);
+
+    const earn = game.computeOfflineEarnings(10 * 24 * 3600);
+    expect(earn.seconds).toBe(MAX_OFFLINE_SECONDS + 6 * 3600);
+    expect(earn.capped).toBe(true);
+  });
+
+  it('bandwidthMult znásobí celkovou kapacitu sítě', () => {
+    const game = new Game({
+      seed: 1,
+      upgrades: [
+        up('bwbase', { type: 'bandwidth', value: 7 }),
+        up('mult', { type: 'bandwidthMult', value: 2 }, { maxLevel: 4 }),
+      ],
+    });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('bwbase', 1);
+    expect(game.totalBandwidth).toBe(10); // 3 + 7
+    game.buy('mult', 2); // ×2^2
+    expect(game.totalBandwidth).toBe(40);
+  });
+
+  it('nové efekty se serializují a načtou (úrovně přežijí save)', () => {
+    const game = new Game({
+      seed: 1,
+      upgrades: [
+        up('speed', { type: 'bufferSpeedMult', value: 1.2 }),
+        up('jack', { type: 'critChance', value: 0.05 }, { maxLevel: 20 }),
+      ],
+    });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('speed', 3);
+    game.buy('jack', 4);
+
+    const restored = new Game({
+      seed: 2,
+      upgrades: [
+        up('speed', { type: 'bufferSpeedMult', value: 1.2 }),
+        up('jack', { type: 'critChance', value: 0.05 }, { maxLevel: 20 }),
+      ],
+    });
+    restored.loadSave(game.serialize());
+    expect(restored.upgrades.level('speed')).toBe(3);
+    expect(restored.critChance).toBeCloseTo(game.critChance, 5);
   });
 });

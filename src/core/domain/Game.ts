@@ -31,6 +31,8 @@ export interface GameEvents extends EventMap {
   PostReady: { phoneId: number; rarity: Rarity };
   SwipeResolved: { phoneId: number; dopamine: BigNumber; rarity: Rarity };
   HiddenGemFound: { phoneId: number; rarity: Rarity };
+  /** Jackpot swipe (crit) – odměna byla vynásobena. Viz Vlna 2 / jackpot_algo. */
+  Jackpot: { phoneId: number; dopamine: BigNumber; multiplier: number };
   Liked: { phoneId: number; likes: BigNumber };
   CommentPosted: { phoneId: number; commentId: string };
   /** Jeden „naskočený" lajk/dislajk během reakce na komentář. */
@@ -71,6 +73,11 @@ export interface UpgradeView {
   /** Dopad na síť (Mbps). `uses` = spotřebovává, `adds` = zvyšuje kapacitu. */
   networkDelta: number;
   networkKind: 'uses' | 'adds' | 'none';
+  /** Postupné odemykání (T6): zamčený = nelze koupit; viditelný = ukázat v UI (vč. teaseru). */
+  locked: boolean;
+  visible: boolean;
+  /** Text požadavku na odemčení (jen když locked), pro UI. */
+  unlockHint?: string;
 }
 
 /** View model platformy pro prezentaci (přepínač sítí). */
@@ -114,6 +121,12 @@ const ATTENTION_COST_COMMENT = 5;
 const ATTENTION_COST_BUBBLE = 4;
 const FOCUS_MIN = 0.35; // minimální násobič odměny manuálu při vyčerpané pozornosti
 const FOCUS_THRESHOLD = 0.35; // pod tímto podílem pozornosti se penalizace plně projeví
+
+// ── Vlna 2 (pre-prestige): nové efekty + postupné odemykání ──
+const JACKPOT_BASE_MULT = 5; // základní násobič jackpotu (crit) – upgrady přidávají přes critMult
+const CRIT_CHANCE_CAP = 0.9; // strop šance na jackpot (ať to nikdy není 100 %)
+const OFFLINE_EFFICIENCY_CAP = 1; // offline efektivita nemůže přesáhnout 100 %
+const UNLOCK_TEASER_FRACTION = 0.5; // zamčený (jen práh Dopaminu) se v UI ukáže, když je práh z poloviny dosažen
 
 // ── Synergie měn (M2) ──
 const SYNERGY_REACH_K = 0.1; // Likes → Reach (× dopamin/swipe), per řád
@@ -293,12 +306,16 @@ export class Game implements Tickable {
     return this.attentionValue;
   }
   get maxAttention(): number {
-    return MAX_ATTENTION;
+    return MAX_ATTENTION * this.effectProduct('attentionMaxMult').toNumber();
+  }
+  /** Násobič regenerace Pozornosti (upgrady Vlny 2). */
+  get attentionRegenMultiplier(): number {
+    return this.effectProduct('attentionRegenMult').toNumber();
   }
 
   /** Násobič odměny manuálních akcí dle pozornosti (1 = svěží, FOCUS_MIN = vyčerpaný). */
   get focusFactor(): number {
-    const ratio = this.attentionValue / MAX_ATTENTION;
+    const ratio = this.attentionValue / this.maxAttention;
     return FOCUS_MIN + (1 - FOCUS_MIN) * Math.min(1, ratio / FOCUS_THRESHOLD);
   }
 
@@ -361,6 +378,33 @@ export class Game implements Tickable {
     return this.effectProduct('consumptionMultiplier').toNumber();
   }
 
+  // ── Vlna 2: nové efekty (čtené dynamicky) ──
+  /** Aktuální strop streaku (M3) – base + upgrady (Doomscroll Stamina). */
+  get streakMax(): number {
+    return STREAK_MAX + this.sumEffect('streakCapBonus');
+  }
+  /** Šance, že je swipe jackpot (crit), 0–1, zastropovaná. 0 = bez upgradů. */
+  get critChance(): number {
+    return Math.min(CRIT_CHANCE_CAP, this.sumEffect('critChance'));
+  }
+  /** Násobič odměny při jackpotu: základ + upgrady (Mega-Jackpot). */
+  get critMultiplier(): number {
+    return JACKPOT_BASE_MULT + this.sumEffect('critMult');
+  }
+  /** Očekávaný násobič z jackpotů (pro odhad/offline). 1 = bez crit upgradů. */
+  get expectedCritFactor(): number {
+    const c = this.critChance;
+    return c > 0 ? 1 + c * (this.critMultiplier - 1) : 1;
+  }
+  /** Efektivita offline těžby (0–1): base + upgrady (Time-Dilation), zastropováno. */
+  get offlineEfficiency(): number {
+    return Math.min(OFFLINE_EFFICIENCY_CAP, OFFLINE_EFFICIENCY + this.sumEffect('offlineEfficiencyBonus'));
+  }
+  /** Strop offline těžby v sekundách: base + upgrady (Cloud Backup). */
+  get maxOfflineSeconds(): number {
+    return MAX_OFFLINE_SECONDS + this.sumEffect('offlineCapHours') * 3600;
+  }
+
   /**
    * Chaos Level 0–100 (V1): roste s počtem telefonů, Brain Rot upgrady a tierem platformy.
    * Prezentace ho mapuje na vizuální přetížení (glitch/saturace). Viz docs/GDD-04 §V1.
@@ -387,7 +431,7 @@ export class Game implements Tickable {
     return mult;
   }
 
-  /** Celková kapacita sítě (Mbps): základ + síťové upgrady. */
+  /** Celková kapacita sítě (Mbps): (základ + síťové upgrady) × bandwidthMult (Data Center). */
   get totalBandwidth(): number {
     let total = BASE_BANDWIDTH;
     for (const def of this.upgrades.all) {
@@ -395,7 +439,12 @@ export class Game implements Tickable {
         total += def.effect.value * this.upgrades.level(def.id);
       }
     }
-    return total;
+    return total * this.effectProduct('bandwidthMult').toNumber();
+  }
+
+  /** Násobič rychlosti bufferingu z upgradů (Vlna 2): > 1 = posty se načítají rychleji. */
+  get bufferSpeedMultiplier(): number {
+    return this.effectProduct('bufferSpeedMult').toNumber();
   }
 
   /** Aktuální spotřeba sítě (Mbps): (telefony + boti) × consumptionMultiplier (AI Slop). */
@@ -461,7 +510,7 @@ export class Game implements Tickable {
     const rate = this.autoSwipeRate;
     if (rate <= 0 || this.phones.length === 0) return 0;
     const bufferTime = this.phones[0]!.config.bufferTime;
-    const scale = Math.max(this.bandwidthBufferScale, 1e-6);
+    const scale = Math.max(this.bandwidthBufferScale * this.bufferSpeedMultiplier, 1e-6);
     const swipeTime = this.phones[0]!.config.swipeTime;
     const cycle = bufferTime / scale + AUTO_SCROLL_GRACE + swipeTime;
     const supply = this.phones.length / cycle; // max postů/s, které farma vyrobí
@@ -474,6 +523,7 @@ export class Game implements Tickable {
     if (swipes <= 0) return BigNumber.ZERO;
     return this.basePostValue.mul(this.globalSwipeMultiplier)
       .mul(BigNumber.of(expectedRarityMultiplier(this.virality)))
+      .mul(BigNumber.of(this.expectedCritFactor))
       .mul(BigNumber.of(swipes));
   }
 
@@ -496,7 +546,15 @@ export class Game implements Tickable {
     const result = phone.swipe(this.globalMultiplier().mul(BigNumber.of(focus)));
     if (!result) return null;
     if (manual) this.spendAttention(ATTENTION_COST_SWIPE);
-    this.credit('DOP', result.dopamine);
+    // Jackpot (crit): jen pokud je šance > 0, ať bez upgradů nesaháme na RNG stream (determinismus).
+    let dopamine = result.dopamine;
+    const critChance = this.critChance;
+    if (critChance > 0 && this.rng.next() < critChance) {
+      const multiplier = this.critMultiplier;
+      dopamine = dopamine.mul(BigNumber.of(multiplier));
+      this.bus.emit('Jackpot', { phoneId, dopamine, multiplier });
+    }
+    this.credit('DOP', dopamine);
     // Některé platformy (TokTik+) pasivně hnijou mozek.
     const br = this.activePlatform.brainRotPerSwipe;
     if (br > 0) this.credit('BR', BigNumber.of(br));
@@ -504,11 +562,11 @@ export class Game implements Tickable {
     const shares = SHARE_BY_RARITY[result.rarity];
     if (shares > 0) this.credit('SHR', BigNumber.of(shares));
     this.bumpStreak();
-    this.bus.emit('SwipeResolved', { phoneId, dopamine: result.dopamine, rarity: result.rarity });
+    this.bus.emit('SwipeResolved', { phoneId, dopamine, rarity: result.rarity });
     if (result.rarity !== 'common') {
       this.bus.emit('HiddenGemFound', { phoneId, rarity: result.rarity });
     }
-    return result;
+    return { dopamine, rarity: result.rarity };
   }
 
   like(phoneId: number, manual = true): BigNumber | null {
@@ -569,6 +627,7 @@ export class Game implements Tickable {
   buy(id: string, requested = 1): number {
     const def = this.upgrades.def(id);
     if (!def) return 0;
+    if (!this.unlockMet(def)) return 0; // zamčený upgrade (T6) nelze koupit
     const want = Math.min(requested, this.upgrades.remaining(id));
     if (want <= 0) return 0;
 
@@ -610,6 +669,7 @@ export class Game implements Tickable {
       const maxed = this.upgrades.isMaxed(def.id);
       const cost = this.upgrades.nextCost(def.id) ?? BigNumber.ZERO;
       const network = this.networkImpact(def);
+      const unlock = this.unlockInfo(def);
       return {
         id: def.id,
         name: def.name,
@@ -619,11 +679,54 @@ export class Game implements Tickable {
         maxed,
         cost,
         costCurrency: def.cost.currency,
-        affordable: !maxed && this.wallet.canAfford(def.cost.currency, cost),
+        affordable: !maxed && !unlock.locked && this.wallet.canAfford(def.cost.currency, cost),
         networkDelta: network.delta,
         networkKind: network.kind,
+        locked: unlock.locked,
+        visible: unlock.visible,
+        unlockHint: unlock.locked ? unlock.hint : undefined,
       };
     });
+  }
+
+  /** Je upgrade odemčený (splněny podmínky `unlock`)? Upgrady bez `unlock` jsou vždy odemčené. */
+  isUnlocked(id: string): boolean {
+    const def = this.upgrades.def(id);
+    return def ? this.unlockMet(def) : false;
+  }
+
+  /** Splňuje upgrade podmínky odemčení? (prerekvizita + práh kumulovaného Dopaminu) */
+  private unlockMet(def: UpgradeDef): boolean {
+    const u = def.unlock;
+    if (!u) return true;
+    if (u.requires && this.upgrades.level(u.requires) < (u.requiresLevel ?? 1)) return false;
+    if (u.dopamine !== undefined && this.totalDopamine.lt(BigNumber.of(u.dopamine))) return false;
+    return true;
+  }
+
+  /**
+   * Stav odemčení pro UI (T6). `locked` = nelze koupit. `visible` = ukázat v liště:
+   * odemčené vždy; zamčené jen jako „teaser", když je prerekvizita splněná a práh Dopaminu
+   * je aspoň z UNLOCK_TEASER_FRACTION dosažen (jinak schováno, ať se strom odhaluje postupně).
+   */
+  private unlockInfo(def: UpgradeDef): { locked: boolean; visible: boolean; hint: string } {
+    const u = def.unlock;
+    if (!u) return { locked: false, visible: true, hint: '' };
+    const prereqMet = !u.requires || this.upgrades.level(u.requires) >= (u.requiresLevel ?? 1);
+    const dopMet = u.dopamine === undefined || this.totalDopamine.gte(BigNumber.of(u.dopamine));
+    if (prereqMet && dopMet) return { locked: false, visible: true, hint: '' };
+
+    if (!prereqMet) {
+      // Prerekvizita nesplněna → schovej úplně (žádný spoiler).
+      const reqDef = this.upgrades.def(u.requires!);
+      const lvl = u.requiresLevel ?? 1;
+      const hint = `🔒 needs ${reqDef?.name ?? u.requires}${lvl > 1 ? ` Lv ${lvl}` : ''}`;
+      return { locked: true, visible: false, hint };
+    }
+    // Chybí už jen práh Dopaminu → teaser, když je z poloviny dosažen.
+    const threshold = BigNumber.of(u.dopamine!);
+    const visible = this.totalDopamine.gte(BigNumber.of(u.dopamine! * UNLOCK_TEASER_FRACTION));
+    return { locked: true, visible, hint: `🔒 ${threshold.format()} 🧠 total` };
   }
 
   /** Dopad upgradu na síť (pro UI: co stojí síť / co kapacitu přidává). */
@@ -693,8 +796,9 @@ export class Game implements Tickable {
    * Předpokládá ustálený stav (rate × čas) – standardní idle aproximace.
    */
   computeOfflineEarnings(seconds: number): OfflineEarnings {
-    const capped = Math.max(0, Math.min(seconds, MAX_OFFLINE_SECONDS));
-    const wasCapped = seconds > MAX_OFFLINE_SECONDS;
+    const cap = this.maxOfflineSeconds;
+    const capped = Math.max(0, Math.min(seconds, cap));
+    const wasCapped = seconds > cap;
     const swipesPerSec = this.effectiveSwipesPerSecond();
     if (swipesPerSec <= 0 || capped <= 0) {
       return {
@@ -706,11 +810,12 @@ export class Game implements Tickable {
       };
     }
 
-    // Offline jsou boti jen z poloviny efektivní (OFFLINE_EFFICIENCY).
-    const eff = capped * OFFLINE_EFFICIENCY;
-    const perSwipe = this.basePostValue.mul(this.globalSwipeMultiplier).mul(
-      BigNumber.of(expectedRarityMultiplier(this.virality)),
-    );
+    // Offline jsou boti jen částečně efektivní (offlineEfficiency – base + upgrady Vlny 2).
+    const eff = capped * this.offlineEfficiency;
+    const perSwipe = this.basePostValue
+      .mul(this.globalSwipeMultiplier)
+      .mul(BigNumber.of(expectedRarityMultiplier(this.virality)))
+      .mul(BigNumber.of(this.expectedCritFactor));
     const dopamine = perSwipe.mul(BigNumber.of(swipesPerSec * eff));
     // Lajky/komentáře nemůžou překročit počet vyrobených postů.
     const likes = this.likeYield.mul(BigNumber.of(Math.min(this.autoLikeRate, swipesPerSec) * eff));
@@ -725,10 +830,13 @@ export class Game implements Tickable {
   // ── Tick (Tickable) ─────────────────────────────────────────────────────────
 
   advance(dt: number): void {
-    this.attentionValue = Math.min(MAX_ATTENTION, this.attentionValue + ATTENTION_REGEN * dt);
+    this.attentionValue = Math.min(
+      this.maxAttention,
+      this.attentionValue + ATTENTION_REGEN * this.attentionRegenMultiplier * dt,
+    );
     this.setStreak(Math.max(STREAK_FLOOR, this.streakValue - STREAK_DECAY * dt));
-    // Přetížení sítě zpomalí buffering všech telefonů stejně.
-    const scale = this.bandwidthBufferScale;
+    // Přetížení sítě zpomalí buffering; upgrady rychlosti (Vlna 2) ho naopak zrychlí.
+    const scale = this.bandwidthBufferScale * this.bufferSpeedMultiplier;
     for (const phone of this.phones) {
       const tick = phone.advance(dt, scale);
       if (tick?.type === 'ready') {
@@ -914,7 +1022,17 @@ export class Game implements Tickable {
         break;
       case 'virality':
       case 'consumptionMultiplier':
-        // čtou se dynamicky (get virality / consumptionMultiplier) – žádná akce není potřeba.
+      // ── Vlna 2: vše čteno dynamicky přes gettery – žádná akce při nákupu ──
+      case 'bufferSpeedMult':
+      case 'attentionMaxMult':
+      case 'attentionRegenMult':
+      case 'streakCapBonus':
+      case 'critChance':
+      case 'critMult':
+      case 'offlineEfficiencyBonus':
+      case 'offlineCapHours':
+      case 'bandwidthMult':
+        // čtou se dynamicky (gettery) – žádná akce není potřeba.
         break;
     }
   }
@@ -957,7 +1075,7 @@ export class Game implements Tickable {
   }
 
   private bumpStreak(): void {
-    this.setStreak(Math.min(STREAK_MAX, this.streakValue + STREAK_STEP));
+    this.setStreak(Math.min(this.streakMax, this.streakValue + STREAK_STEP));
   }
 
   private dampStreak(): void {

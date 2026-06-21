@@ -3,7 +3,8 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav k commitu `c6bf479`** · větev `claude/serene-goodall-af920r` · **137 testů zelených**.
+**Stav:** Vlna 2 (část 1) — **T6 postupné odemykání** + **nové typy efektů** hotové ·
+větev `claude/serene-goodall-af920r` · **153 testů zelených**.
 
 ---
 
@@ -63,7 +64,7 @@ src/core/
                CostCurve.ts (exp. ceny), UpgradeStore.ts (úrovně+ceny),
                Bandwidth.ts (load/bufferScale)
   domain/      Phone.ts (FSM buffering/ready/swiping), Game.ts (★ orchestrátor, ~900 řádků)
-  content/     upgrades.ts (32 upgradů), platforms.ts (5 platforem),
+  content/     upgrades.ts (42 upgradů vč. Vlny 2 + UpgradeDef.unlock), platforms.ts (5 platforem),
                comments.json + CommentPool.ts (komentářová ruleta)
   persistence/ SaveData.ts (SaveState typ)
 src/audio/     SoundManager.ts (Web Audio, syntetizované tóny)
@@ -154,17 +155,26 @@ CurrencyChanged, StreakChanged, UpgradePurchased, PlatformUnlocked/Changed, Bubb
 
 ### 🔜 Vlna 2 (pre-prestige, požadavky hráče) — ROZPRACOVÁNO
 Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider hlasitosti, #3 schování maxed,
-#5-část offline, #10 fix poskakování). **Zbývá vlna 2:**
-- **#4** Postupné odemykání stromu upgradů (`UpgradeDef.unlock`: práh Dopaminu / prerekvizita;
-  `UpgradeView` přidá `locked/visible`; UI ukáže jen relevantní). = backlog **T6**.
-- **#6/#7** ~15 nových „wow" upgradů — **ne jen procenta**, ale **nové typy efektů**: rychlejší buffering,
-  vyšší/rychlejší Pozornost, vyšší streak cap, crit/jackpot šance, levnější síť, offline efektivita,
-  auto-buy, atd. + ikony/štítky.
-- **#8** Vylepšení telefonů (rychlejší načítání = efekt na bufferTime; vizuální varianty Cihla→RGB→Bot Farm).
+#5-část offline, #10 fix poskakování).
+
+**Hotovo (část 1):**
+- ✅ **#4** Postupné odemykání stromu upgradů (`UpgradeDef.unlock`: práh kumulovaného Dopaminu /
+  prerekvizita; `UpgradeView.locked/visible/unlockHint`; `Game.buy` zamčené odmítá; harness
+  schová/teaseruje). = backlog **T6**. Detail `GDD-03 §3.2`.
+- ✅ **#6/#7** 11 nových „wow" upgradů s **novými typy efektů** (ne jen procenta): `bufferSpeedMult`
+  (rychlejší buffering), `attentionMaxMult`/`attentionRegenMult` (Pozornost), `streakCapBonus`,
+  `critChance`/`critMult` (**jackpot** swipe + event `Jackpot`), `offlineEfficiencyBonus`/
+  `offlineCapHours`, `bandwidthMult`. Vše čteno dynamicky přes gettery. Tabulka `GDD-03 §3.2`.
+- ✅ **#8 (část)** „Rychlejší načítání" telefonů řešeno přes `bufferSpeedMult` (zrychluje buffering
+  všech telefonů). Zbývá **vizuální** část (#8 varianty Cihla→RGB→Bot Farm) — patří k UI Fázi 8.
+
+**Zbývá:**
 - **#9** Vyjížděcí **panel upgradů** (boční drawer s kategoriemi Hardware/Algoritmy/Síť/Boti/Brain Rot)
-  místo spodní lišty.
+  místo spodní lišty. *(Čistě UI — main.ts je dočasný harness, plný UI = Fáze 8.)*
+- **#8** vizuální varianty telefonů (UI/Fáze 8).
 - **hlubší #5 rebalance** — zploštit exponenciální explozi (cap multiplikátorů / dražší křivky),
-  ať se hra „od jisté fáze nezlomí".
+  ať se hra „od jisté fáze nezlomí". Pozn.: nové cap konstanty (`CRIT_CHANCE_CAP`, `OFFLINE_EFFICIENCY_CAP`,
+  maxLevel u Vlny 2) už drží nové efekty v mezích — globální explozi dopamine-multiplikátorů to ale neřeší.
 
 ### Pak: Fáze 6 — Prestige (Dopamine Overdose)
 Overdose trigger (kritický DOP/s nebo milník) → kolaps/reset → **Clarity** měna → Zen shop

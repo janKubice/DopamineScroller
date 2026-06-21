@@ -466,6 +466,16 @@ body {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
+/* #4 postupné odemykání: zamčený „teaser" upgrade je naznačený, ale nekupitelný */
+.upg.is-locked {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: default;
+}
+.upg.is-locked .upg__cost {
+  color: var(--accent);
+  font-weight: 700;
+}
 
 .upg__icon {
   grid-row: 1 / 3;

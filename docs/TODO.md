@@ -27,10 +27,12 @@ jen posty splňující podmínku (s pojistkou `MAX_AUTO_WAIT`, ať se nezasekne)
 ### ✅ T5 — Schovat vymaxované upgrady  `[hotovo]`
 Vymaxované upgrady se v liště skryjí (`display:none` dle `UpgradeView.maxed`). Plný panel = T6/#9.
 
-### ⬜ T6 — Postupné odemykání stromu upgradů  `[Fáze 5/6]`
-Upgrady se neukazují všechny hned, ale **odemykají postupně** (prahy kumulovaného Dopaminu
-nebo prerekvizity – vlastnit jiný upgrade / platformu). Doména: `UpgradeDef.unlock?` (práh /
-prereq), `UpgradeView` přidá `visible`/`locked`. UI ukáže jen odemčené (+ náznak „další brzy").
+### ✅ T6 — Postupné odemykání stromu upgradů  `[hotovo · Vlna 2]`
+`UpgradeDef.unlock?` = práh **kumulovaného** Dopaminu (`dopamine`) a/nebo prerekvizita
+(`requires`/`requiresLevel`). `Game.buy` zamčený odmítne; `UpgradeView` nese `locked`/`visible`/
+`unlockHint`. UI: prereq nesplněn → schováno, chybí jen práh → „teaser" od poloviny prahu
+(`UNLOCK_TEASER_FRACTION`). Aplikováno na bubble upgrady (prereq Dopamine Detector), mid/late
+strom a celou Vlnu 2. Detail: `GDD-03 §3.2`.
 
 ---
 

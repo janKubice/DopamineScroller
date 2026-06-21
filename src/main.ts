@@ -252,11 +252,25 @@ function refreshUpgrades(): void {
   for (const u of game.upgradeView()) {
     const btn = upgradesBar.querySelector<HTMLButtonElement>(`button[data-id="${u.id}"]`);
     if (!btn) continue;
-    btn.querySelector('.upg__lvl')!.textContent = u.maxed ? 'MAX' : u.level > 0 ? `Lv ${u.level}` : '';
-    btn.querySelector('.upg__cost')!.textContent = u.maxed
-      ? ''
-      : `${CURRENCIES[u.costCurrency].symbol} ${u.cost.format()}`;
+    // #3 vymaxované + #4 dosud neviditelné (zamčené, nedosažitelné) schováme.
+    btn.style.display = u.maxed || !u.visible ? 'none' : '';
+    btn.classList.toggle('is-locked', u.locked);
+    const lvl = btn.querySelector('.upg__lvl')!;
+    const cost = btn.querySelector('.upg__cost')!;
     const net = btn.querySelector<HTMLElement>('.upg__net')!;
+
+    // #4 zamčený teaser: místo ceny ukážeme požadavek na odemčení a zakážeme nákup.
+    if (u.locked) {
+      lvl.textContent = '';
+      cost.textContent = u.unlockHint ?? '🔒';
+      net.textContent = '';
+      btn.disabled = true;
+      btn.classList.remove('is-owned');
+      continue;
+    }
+
+    lvl.textContent = u.maxed ? 'MAX' : u.level > 0 ? `Lv ${u.level}` : '';
+    cost.textContent = u.maxed ? '' : `${CURRENCIES[u.costCurrency].symbol} ${u.cost.format()}`;
     if (u.networkKind === 'uses') {
       net.textContent = `📶 −${u.networkDelta}`;
       net.className = 'upg__net upg__net--uses';
@@ -266,8 +280,6 @@ function refreshUpgrades(): void {
     } else {
       net.textContent = '';
     }
-    // #3 vymaxované upgrady schováme (odkup je hotový)
-    btn.style.display = u.maxed ? 'none' : '';
     btn.disabled = !u.affordable;
     btn.classList.toggle('is-owned', u.level > 0);
   }
@@ -354,6 +366,12 @@ game.bus.on('HiddenGemFound', (e) => {
   sound.gem();
   pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000);
   confetti(CONFETTI_BY_RARITY[e.rarity] ?? 12);
+});
+// Vlna 2: jackpot (crit) swipe — velká výplata, ať to „cinkne".
+game.bus.on('Jackpot', (e) => {
+  sound.gem();
+  pushNote(`🎰 JACKPOT ×${e.multiplier}! +${e.dopamine.format()} 🧠`, 'note--gem', 2800);
+  confetti(24);
 });
 game.bus.on('UpgradePurchased', (e) => {
   sound.upgrade();

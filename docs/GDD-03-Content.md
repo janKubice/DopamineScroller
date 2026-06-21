@@ -114,7 +114,8 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > 📰 **Fake News Syndicate** (DOP 5000, +1.5 virality, max 1). Vyšší virality = víc Rare/Epic/
 > Legendary postů (`Game.virality`, efekt `virality`).
 
-> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **27 upgradů** seřazených
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **42 upgradů** (vč. Vlny 2,
+> viz §3.2, a Brain Rot větve §4.2) seřazených
 > od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
 > kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
 > For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),
@@ -124,6 +125,50 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > **Síťový dopad v UI:** tlačítka upgradů ukazují `📶 −X` (spotřeba: telefony, boti) nebo
 > `📶 +X` (kapacita: routery), a po nákupu vyskočí notifikace s aktuální spotřebou/kapacitou.
 > View model: `UpgradeView.networkDelta`/`networkKind`.
+
+### 3.2 Vlna 2 — postupné odemykání + nové typy efektů (pre-prestige)
+
+**Postupné odemykání stromu (T6/#4):** `UpgradeDef.unlock?` se dvěma nezávislými podmínkami:
+`dopamine` (práh **kumulovaného** Dopaminu, `Game.totalDopamineEarned` — ne aktuální zůstatek!)
+a `requires`/`requiresLevel` (vlastnictví jiného upgradu). `Game.buy` zamčený upgrade odmítne.
+`UpgradeView` nese `locked` (nelze koupit), `visible` (ukázat v UI) a `unlockHint`:
+- **prerekvizita nesplněna** → úplně schováno (`visible:false`, žádný spoiler),
+- **chybí jen práh Dopaminu** → „teaser" (`visible:true`, `locked:true`) jakmile je práh aspoň
+  z poloviny (`UNLOCK_TEASER_FRACTION`) dosažen; harness ukáže `🔒 <práh> 🧠 total` a zakáže nákup.
+
+Aplikováno na bubble upgrady (`bigger_hits`/`faster_bubbles` ⇒ `requires dopamine_detector`) a na
+mid/late strom + celou Vlnu 2 (prahy Dopaminu). Early upgrady zůstávají bez zámku (start není prázdný).
+
+**Nové typy efektů** (deklarativní, čtené dynamicky přes gettery — žádná akce při nákupu):
+
+| efekt | getter | význam |
+|---|---|---|
+| `bufferSpeedMult` | `bufferSpeedMultiplier` | × rychlost bufferingu (rychlejší načítání postů) |
+| `attentionMaxMult` | `maxAttention` | × maximum Pozornosti (M1) |
+| `attentionRegenMult` | `attentionRegenMultiplier` | × regenerace Pozornosti |
+| `streakCapBonus` | `streakMax` | + strop streaku (M3) |
+| `critChance` | `critChance` | šance na **jackpot** swipe (0–1, cap `CRIT_CHANCE_CAP` 0.9) |
+| `critMult` | `critMultiplier` | + násobič jackpotu (base `JACKPOT_BASE_MULT` 5) |
+| `offlineEfficiencyBonus` | `offlineEfficiency` | + efektivita offline těžby (cap 1.0) |
+| `offlineCapHours` | `maxOfflineSeconds` | + strop offline těžby (hodiny) |
+| `bandwidthMult` | `totalBandwidth` | × celková kapacita sítě |
+
+> **Jackpot (crit):** při swipe se hodí RNG **jen pokud `critChance > 0`** (jinak se nesahá na
+> RNG stream → determinismus starších save/testů). Trefa vynásobí Dopamin `critMultiplier`× a
+> emituje event `Jackpot`. Odhad i offline počítají očekávaný přínos přes `expectedCritFactor`.
+
+| id | Název | Měna · base · mult | Efekt | Odemčení |
+|---|---|---|---|---|
+| `gigabit_thumbs` | ⚡ Gigabit Thumbs | DOP · 500 · 1.4 | +15 % buffering/lvl | 350 🧠 |
+| `predictive_preload` | 🔮 Predictive Preload | DOP · 9000 · 1.5 | +25 % buffering/lvl | 12k 🧠 + Gigabit Thumbs Lv3 |
+| `meditation_app` | 🧘 Meditation App | DOP · 600 · 1.45 | +50 % regen Pozornosti/lvl | 500 🧠 |
+| `adderall` | 💊 Off-Brand Adderall | DOP · 1200 · 1.5 | +40 % max Pozornost/lvl (max 8) | 900 🧠 |
+| `doomscroll_stamina` | 🥵 Doomscroll Stamina | DOP · 2000 · 1.6 | +0.5 strop streaku/lvl (max 6) | 1.8k 🧠 |
+| `jackpot_algo` | 🎰 Jackpot Algorithm | DOP · 3000 · 1.55 | +5 % šance jackpotu/lvl (max 12) | 2.5k 🧠 |
+| `mega_jackpot` | 💰 Mega-Jackpot Mode | DOP · 18000 · 1.6 | +3 výplata jackpotu/lvl (max 8) | 20k 🧠 + Jackpot Algo Lv2 |
+| `time_dilation` | ⏳ Time-Dilation Field | DOP · 5000 · 1.5 | +10 % offline efektivita/lvl (max 5) | 5k 🧠 |
+| `cloud_backup` | ☁️ Cloud Backup | DOP · 7000 · 1.5 | +2 h offline cap/lvl (max 6) | 6k 🧠 |
+| `data_center` | 🏢 Personal Data Center | DOP · 25000 · 1.7 | ×2 kapacita sítě/lvl (max 4) | 30k 🧠 + Fiber Optics |
 
 ## 4. Temná větev: Brain Rot
 
@@ -153,7 +198,8 @@ Kupováno za 🧟 **Brain Rot** (generuje TokTik+). Velký boost, ale **poškozu
 | `rage_bait` | 😡 Rage-Bait Generator | 20 ·1.5 | ×1.6 Dopamin/lvl | — |
 | `hate_bots` | 💢 Hate-Speech Bots | 40 ·1.4 | +3 auto-lajky/s/lvl | — |
 | `ai_slop` | 🗑️ AI Slop Factory | 150 (max 1) | ×4 Dopamin | **+50 % spotřeba sítě** (`consumptionMultiplier`) |
-| `skibidi` | 🚽 Skibidi Generator | 300 (max 1) | ×2.5 Dopamin | „mozkový věk −5 let" |
+| `neural_implant` | 🧠 Neural Implant (Beta) | 80 ·1.5 | ×2 regen Pozornosti/lvl (max 5) | chaos ↑ (vyžaduje AI Slop) |
+| `skibidi` | 🚽 Skibidi Generator | 300 (max 1) | ×2.5 Dopamin | „mozkový věk −5 let" (vyžaduje AI Slop) |
 
 > `UpgradeDef.sideEffect` umožní upgradu mít i downside (AI Slop). `chaosLevel` = f(telefony,
 > Brain Rot upgrady, tier platformy).
