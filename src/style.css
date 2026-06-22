@@ -1337,3 +1337,107 @@ html.disco body::before {
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(47, 158, 68, 0.5);
 }
+
+/* ── Fáze 9: Achievements panel ── */
+.ach-box {
+  width: min(560px, 94vw);
+}
+.ach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ach {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  opacity: 0.55;
+}
+.ach.is-unlocked {
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.ach__icon {
+  font-size: 28px;
+  width: 36px;
+  text-align: center;
+}
+.ach__body {
+  display: flex;
+  flex-direction: column;
+}
+.ach__desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Fáze 9 (C4): „Hlas Algoritmu" banner ── */
+.algo {
+  position: fixed;
+  top: 57px;
+  left: 0;
+  right: 0;
+  z-index: 140;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 22px;
+  background: #0a0a0f;
+  color: #d8d8e0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid #ff2d6f;
+  animation: algo-in 0.3s ease-out;
+  pointer-events: none;
+}
+.algo[hidden] {
+  display: none;
+}
+.algo__tag {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  color: #ff2d6f;
+  font-weight: 800;
+}
+.algo__text {
+  font-size: 17px;
+}
+@keyframes algo-in {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ── Fáze 9 (C4): falešné ToS ── */
+.tos__scroll {
+  max-height: 50vh;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.tos__scroll p {
+  margin: 0 0 10px;
+}
+.tos__fine {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Fáze 9 (C4): dystopické loading tipy ── */
+.loading-tip {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 170px;
+  line-height: 1.3;
+}

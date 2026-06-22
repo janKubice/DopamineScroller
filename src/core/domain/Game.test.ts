@@ -1294,3 +1294,134 @@ describe('Game — dopamine meter (V4/V1 color grading & chaos)', () => {
     expect(game.dopamineMeter).toBeLessThanOrEqual(1);
   });
 });
+
+// ── Fáze 9: Achievementy + narativ (Hlas Algoritmu) ───────────────────────────
+
+describe('Game — achievementy (F9)', () => {
+  it('first_swipe se odemkne po prvním swipu a emituje event', () => {
+    const game = new Game({ seed: 1 });
+    let evt: { id: string } | null = null;
+    game.bus.on('AchievementUnlocked', (e) => {
+      if (e.id === 'first_swipe') evt = e;
+    });
+    expect(game.isAchievementUnlocked('first_swipe')).toBe(false);
+    readyAndSwipe(game);
+    game.advance(0.1); // checkAchievements běží v advance
+    expect(game.isAchievementUnlocked('first_swipe')).toBe(true);
+    expect(evt).not.toBeNull();
+  });
+
+  it('phone achievementy podle počtu telefonů', () => {
+    const game = new Game({ seed: 1 });
+    for (let i = 0; i < 9; i++) game.addPhone(); // 10 telefonů
+    game.advance(0.1);
+    expect(game.isAchievementUnlocked('two_screens')).toBe(true);
+    expect(game.isAchievementUnlocked('phone_farmer')).toBe(true);
+    expect(game.isAchievementUnlocked('bot_farm')).toBe(false); // potřebuje 40
+  });
+
+  it('achievement se emituje jen jednou', () => {
+    const game = new Game({ seed: 1 });
+    let count = 0;
+    game.bus.on('AchievementUnlocked', (e) => {
+      if (e.id === 'two_screens') count++;
+    });
+    game.addPhone();
+    for (let i = 0; i < 10; i++) game.advance(0.1);
+    expect(count).toBe(1);
+  });
+
+  it('achievementy přežijí prestige', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    game.addPhone();
+    game.advance(0.1);
+    expect(game.isAchievementUnlocked('two_screens')).toBe(true);
+    readyAndSwipe(game);
+    game.prestige();
+    expect(game.phones).toHaveLength(1); // běh resetován
+    expect(game.isAchievementUnlocked('two_screens')).toBe(true); // achievement trvalý
+  });
+
+  it('skrytý achievement má popis ??? dokud není odemčen', () => {
+    const game = new Game({ seed: 1 });
+    const before = game.achievementsView().find((a) => a.id === 'slop_merchant')!;
+    expect(before.secret).toBe(true);
+    expect(before.description).toContain('???');
+    game.wallet.add('BR', BigNumber.of(1000));
+    game.buy('ai_slop', 1);
+    game.advance(0.1);
+    expect(game.isAchievementUnlocked('slop_merchant')).toBe(true);
+    const after = game.achievementsView().find((a) => a.id === 'slop_merchant')!;
+    expect(after.description).not.toContain('???');
+  });
+
+  it('ukládají se a po loadu se neemitují znovu; starý save se tiše dorovná', () => {
+    const game = new Game({ seed: 1 });
+    for (let i = 0; i < 9; i++) game.addPhone();
+    game.advance(0.1);
+    const snap = game.serialize();
+    expect(snap.achievements).toContain('phone_farmer');
+
+    // normální load: žádný re-emit
+    const restored = new Game({ seed: 2 });
+    let emitted = 0;
+    restored.bus.on('AchievementUnlocked', () => emitted++);
+    restored.loadSave(snap);
+    restored.advance(0.1);
+    expect(restored.isAchievementUnlocked('phone_farmer')).toBe(true);
+    expect(emitted).toBe(0);
+
+    // starý save (bez pole achievements): splněné se tiše doplní (bez spamu)
+    delete (snap as { achievements?: string[] }).achievements;
+    const old = new Game({ seed: 3 });
+    let oldEmitted = 0;
+    old.bus.on('AchievementUnlocked', () => oldEmitted++);
+    old.loadSave(snap);
+    expect(old.isAchievementUnlocked('phone_farmer')).toBe(true);
+    expect(oldEmitted).toBe(0);
+  });
+
+  it('achievementsView nese počty', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.achievementsTotal).toBe(game.achievementsView().length);
+    expect(game.achievementsUnlockedCount).toBe(0);
+  });
+});
+
+describe('Game — narativ „Hlas Algoritmu" (C4)', () => {
+  it('Algoritmus promluví při dosažení Dopaminu, ale jen jednou', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(100) });
+    const lines: string[] = [];
+    game.bus.on('AlgorithmSpeaks', (e) => lines.push(e.id));
+    readyAndSwipe(game); // ~100 vydělaného Dopaminu → 'hello' (práh 50)
+    game.advance(0.1);
+    expect(lines).toContain('hello');
+    const before = lines.length;
+    for (let i = 0; i < 10; i++) game.advance(0.1);
+    expect(lines.length).toBe(before); // 'hello' nezazní podruhé
+  });
+
+  it('prestige hláška zazní po prvním prestige', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const lines: string[] = [];
+    game.bus.on('AlgorithmSpeaks', (e) => lines.push(e.id));
+    readyAndSwipe(game);
+    game.prestige();
+    game.advance(0.1);
+    expect(lines).toContain('first_prestige');
+  });
+
+  it('po loadu se viděné hlášky tiše označí (žádný spam)', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(100) });
+    readyAndSwipe(game);
+    game.advance(0.1); // 'hello' viděno
+    const snap = game.serialize();
+    expect(snap.narrative).toContain('hello');
+    const restored = new Game({ seed: 2, platforms: richPlatform(100) });
+    let spoke = 0;
+    restored.bus.on('AlgorithmSpeaks', () => spoke++);
+    restored.loadSave(snap);
+    restored.advance(0.1);
+    expect(spoke).toBe(0);
+  });
+});

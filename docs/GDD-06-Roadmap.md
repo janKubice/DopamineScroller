@@ -15,7 +15,7 @@ kdy je doména hotová a otestovaná.
 | **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, **Zen shop** (trvalé upgrady), perzistence Clarity, **Doomscroll Wrapped** | ✅ |
 | **F7 — Offline & Save** | „Zavřu a otevřu, progres zůstal" | localStorage save + autosave, verzování, **offline výpočet** (closed-form rate × čas, cap 8 h) — *předtaženo* | ✅ |
 | **F8 — UI & Juice** | „Vypadá to jako ta vize" | ✅ **V1** WebGL chaos shader (situační), ✅ **V2** dark patterns (cookie consent), ✅ **V3** Skinner-box Like + slot-machine jackpot, ✅ **V4** color grading, ✅ **V5** fake-crash→Zen, ✅ floating numbers/skiny. (Plný renderer rewrite do `src/ui` = volitelně dál.) | ✅ |
-| **F9 — Polish & Balance** | „Hratelná satira" | Zbývající **minihry (M4)**: CAPTCHA, Skip-Ad, Outrage; balanc (konstanty jako data), achievementy, **Doomscroll Wrapped (C5)**, narativní hlas Algoritmu (C4) | ⬜ |
+| **F9 — Polish & Balance** | „Hratelná satira" | ✅ minihry (CAPTCHA, Skip-Ad), ✅ **achievementy** (17, data-driven), ✅ **Doomscroll Wrapped (C5)**, ✅ **narativní hlas Algoritmu (C4)** + falešné ToS + dystopické loading tipy. Zbývá (volitelně): Outrage minihra, balanc konstant do JSON | ✅ |
 
 ## Průřezové zásady (platí od F0)
 - Balanc konstanty jako **externí data** (JSON), ne v kódu.
@@ -48,4 +48,8 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
   dark pattern, V3 Skinner-box Like (srdíčka) + slot-machine jackpot, V4 color grading
   (`dopamineMeter`), V5 fake-crash→Zen. Glitch je situační (vysoký chaos), ne na startu.
   Plný renderer rewrite (Pixi/raw WebGL místo DOM harnessu) je volitelně dál.
-- ⬜ **Další** — F9 (balanc do JSON, zbylé minihry/achievementy, narativní hlas Algoritmu).
+- ✅ **F9 hotová** — **achievementy** (`content/achievements.ts`, 17, data-driven, trvalé, save),
+  **narativní hlas Algoritmu** (`content/narrative.ts`, eskalující hlášky) + falešné ToS + dystopické
+  loading tipy. Minihry CAPTCHA/Skip-Ad už z F6.
+- 🎉 **Roadmapa hotová (F0–F9).** Volitelně dál: Outrage minihra, balanc konstant do JSON, plný
+  WebGL renderer, achievementové odměny, víc obsahu (platformy C1, hardware C3, Brain Rot C2).

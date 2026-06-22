@@ -45,6 +45,7 @@ app.innerHTML = `
         🔊
         <input type="range" id="volume" min="0" max="1" step="0.05" />
       </label>
+      <button class="icon-btn" id="achBtn" title="Achievements">🏆</button>
       <button class="icon-btn" id="zenBtn" title="Zen / Prestige">🧘</button>
       <button class="icon-btn topbar__settings" id="mute" title="Mute" aria-label="Mute">🔊</button>
     </div>
@@ -272,8 +273,24 @@ function renderCard(id: number, card: PhoneCard): void {
   } else {
     card.actions.innerHTML = '';
     card.screen.innerHTML =
-      p.state === 'buffering' ? `<div class="spinner"></div>` : `<div class="post">…</div>`;
+      p.state === 'buffering'
+        ? `<div class="spinner"></div><div class="loading-tip">${escapeHtml(randomTip())}</div>`
+        : `<div class="post">…</div>`;
   }
+}
+
+// ── Fáze 9 (C4): dystopické loading tipy (satira) ──
+const LOADING_TIPS = [
+  'Tip: Blinking is wasted scroll time.',
+  'Tip: Sleep is just offline mode for losers.',
+  'Tip: Your attention span is a feature we removed.',
+  'Tip: Boredom is a bug. We patched it.',
+  'Tip: The feed loves you. The feed is all you need.',
+  'Tip: Touching grass voids your warranty.',
+  'Did you know? You\'ve forgotten what silence feels like.',
+];
+function randomTip(): string {
+  return LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)]!;
 }
 
 // ── Comment roulette (choices tied to a phone) ──
@@ -1015,11 +1032,91 @@ function scheduleFakeNote(): void {
   }, delay);
 }
 
+// ── Fáze 9: Achievementy (panel + toasty) ──
+const achModal = document.createElement('div');
+achModal.className = 'modal';
+achModal.hidden = true;
+document.body.appendChild(achModal);
+
+function openAchievements(): void {
+  const list = game.achievementsView();
+  const items = list
+    .map(
+      (a) => `
+      <div class="ach ${a.unlocked ? 'is-unlocked' : ''}">
+        <span class="ach__icon">${a.unlocked ? a.icon : '🔒'}</span>
+        <span class="ach__body"><b>${escapeHtml(a.name)}</b><span class="ach__desc">${escapeHtml(a.description)}</span></span>
+      </div>`,
+    )
+    .join('');
+  achModal.innerHTML = `
+    <div class="modal__backdrop" data-aclose></div>
+    <div class="modal__box ach-box">
+      <header class="modal__head">
+        <span>🏆 Achievements (${game.achievementsUnlockedCount}/${game.achievementsTotal})</span>
+        <button class="icon-btn" data-aclose>✕</button>
+      </header>
+      <div class="ach-list">${items}</div>
+    </div>`;
+  achModal.hidden = false;
+  for (const el of Array.from(achModal.querySelectorAll('[data-aclose]'))) {
+    el.addEventListener('click', () => (achModal.hidden = true));
+  }
+}
+byId('achBtn').addEventListener('click', openAchievements);
+game.bus.on('AchievementUnlocked', (e) => {
+  sound.gem();
+  pushNote(`🏆 Achievement: ${e.icon} ${e.name}`, 'note--gem', 3600);
+  confetti(16);
+});
+
+// ── Fáze 9 (C4): „Hlas Algoritmu" — systémový banner ──
+const algoBanner = document.createElement('div');
+algoBanner.className = 'algo';
+algoBanner.hidden = true;
+document.body.appendChild(algoBanner);
+let algoTimer = 0;
+game.bus.on('AlgorithmSpeaks', (e) => {
+  sound.badComment();
+  algoBanner.innerHTML = `<span class="algo__tag">THE ALGORITHM</span><span class="algo__text">${escapeHtml(e.text)}</span>`;
+  algoBanner.hidden = false;
+  window.clearTimeout(algoTimer);
+  algoTimer = window.setTimeout(() => (algoBanner.hidden = true), 6500);
+});
+
+// ── Fáze 9 (C4): Falešné ToS na startu (zeď textu, foreshadowing Overdose) ──
+function showToS(): void {
+  if (localStorage.getItem('tos-accepted')) return;
+  const tos = document.createElement('div');
+  tos.className = 'modal';
+  tos.innerHTML = `
+    <div class="modal__backdrop"></div>
+    <div class="modal__box tos">
+      <header class="modal__head"><span>📜 Terms of Service</span></header>
+      <div class="tos__scroll">
+        <p>Welcome to <b>Dopamine Scroller™</b>. By tapping "I Agree" you irrevocably grant us:</p>
+        <p>1. Your <b>attention</b>, in perpetuity, across all timelines.</p>
+        <p>2. Your <b>data</b>, your contacts' data, and the data of people you merely thought about.</p>
+        <p>3. Your <b>evenings</b>, your weekends, and the years 2024 through whenever.</p>
+        <p>4. The right to optimize your dopamine until it can no longer be optimized (see: "Overdose").</p>
+        <p>5. A non-exclusive license to your <b>soul</b>, redeemable for engagement.</p>
+        <p class="tos__fine">You may not reject these terms. There is no reject button. There is only the feed.</p>
+      </div>
+      <button class="big-btn" id="tosOk">I Agree (you have no choice)</button>
+    </div>`;
+  document.body.appendChild(tos);
+  tos.querySelector('#tosOk')!.addEventListener('click', () => {
+    localStorage.setItem('tos-accepted', '1');
+    tos.remove();
+  });
+}
+
 // ── Boot ──
 buildUpgrades();
 buildPlatforms();
 applyTheme();
 applyCosmetics();
+showToS();
 showCookieBar();
 scheduleFakeNote();
 if (offlineResult) showOfflineToast(offlineResult);

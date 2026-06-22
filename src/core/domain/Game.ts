@@ -9,6 +9,8 @@ import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
 import { UPGRADES, categoryOf, effectTotalLabel, type UpgradeDef, type UpgradeCategory } from '../content/upgrades';
 import { CLARITY_UPGRADES } from '../content/clarity';
+import { ACHIEVEMENTS, type AchievementDef } from '../content/achievements';
+import { NARRATIVE, type NarrativeTrigger } from '../content/narrative';
 import { PLATFORMS, DEFAULT_PLATFORM_ID, type PlatformDef } from '../content/platforms';
 import {
   Phone,
@@ -58,6 +60,20 @@ export interface GameEvents extends EventMap {
   CaptchaResolved: { id: number; success: boolean; reward: BigNumber };
   /** Prestige: Dopamine Overdose → reset za Clarity (s „Doomscroll Wrapped" shrnutím). */
   Prestiged: { summary: WrappedSummary };
+  /** Odemčen achievement (Fáze 9). */
+  AchievementUnlocked: { id: string; name: string; icon: string };
+  /** „Hlas Algoritmu" promluvil (narativní vrstva C4). */
+  AlgorithmSpeaks: { id: string; text: string };
+}
+
+/** View model achievementu pro prezentaci (Fáze 9). */
+export interface AchievementView {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  secret: boolean;
 }
 
 /** „Doomscroll Wrapped" – shrnutí běhu při prestige (satira Spotify Wrapped). */
@@ -328,6 +344,9 @@ export class Game implements Tickable {
   // Statistiky (Doomscroll Wrapped + lifetime)
   private runStats: RunStats = { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
   private lifetime: LifetimeStats = { prestiges: 0, clarityEarned: BigNumber.ZERO, dopamineAllTime: BigNumber.ZERO };
+  // Achievementy + narativ (Fáze 9) – trvalé (přežijí prestige, ukládají se)
+  private readonly unlockedAchievements = new Set<string>();
+  private readonly seenNarrative = new Set<string>();
   private autoLikeBudget = 0;
   private autoSwipeBudget = 0;
   private autoCommentBudget = 0;
@@ -1163,6 +1182,98 @@ export class Game implements Tickable {
     }
   }
 
+  // ── Achievementy & narativ „Hlas Algoritmu" (Fáze 9) ────────────────────────
+
+  isAchievementUnlocked(id: string): boolean {
+    return this.unlockedAchievements.has(id);
+  }
+  get achievementsUnlockedCount(): number {
+    return this.unlockedAchievements.size;
+  }
+  get achievementsTotal(): number {
+    return ACHIEVEMENTS.length;
+  }
+
+  /** View achievementů (skryté mají popis „???" dokud nejsou odemčené). */
+  achievementsView(): AchievementView[] {
+    return ACHIEVEMENTS.map((a) => {
+      const unlocked = this.unlockedAchievements.has(a.id);
+      return {
+        id: a.id,
+        name: a.name,
+        icon: a.icon,
+        unlocked,
+        secret: a.secret ?? false,
+        description: a.secret && !unlocked ? '??? (secret)' : a.description,
+      };
+    });
+  }
+
+  private achievementMet(def: AchievementDef): boolean {
+    const c = def.condition;
+    switch (c.kind) {
+      case 'dopamine':
+        return this.totalDopamine.gte(BigNumber.of(c.value));
+      case 'phones':
+        return this.phones.length >= c.value;
+      case 'swipes':
+        return this.runStats.swipes >= c.value;
+      case 'jackpots':
+        return this.runStats.jackpots >= c.value;
+      case 'gems':
+        return this.runStats.gems >= c.value;
+      case 'brainRot':
+        return this.wallet.get('BR').gte(BigNumber.of(c.value));
+      case 'clarity':
+        return this.lifetime.clarityEarned.gte(BigNumber.of(c.value));
+      case 'prestiges':
+        return this.lifetime.prestiges >= c.value;
+      case 'platforms':
+        return this.unlockedPlatformIds.size >= c.value;
+      case 'upgrade':
+        return this.upgrades.level(c.id) >= c.value;
+    }
+  }
+
+  /** Odemkne nově splněné achievementy. `emit=false` jen tiše označí (po loadu, ať nespamuje). */
+  private checkAchievements(emit = true): void {
+    for (const a of ACHIEVEMENTS) {
+      if (this.unlockedAchievements.has(a.id)) continue;
+      if (this.achievementMet(a)) {
+        this.unlockedAchievements.add(a.id);
+        if (emit) this.bus.emit('AchievementUnlocked', { id: a.id, name: a.name, icon: a.icon });
+      }
+    }
+  }
+
+  private narrativeMet(t: NarrativeTrigger): boolean {
+    switch (t.kind) {
+      case 'dopamine':
+        return this.totalDopamine.gte(BigNumber.of(t.value));
+      case 'prestiges':
+        return this.lifetime.prestiges >= t.value;
+      case 'chaos':
+        return this.chaosLevel >= t.value;
+      case 'platforms':
+        return this.unlockedPlatformIds.size >= t.value;
+      case 'brainRot':
+        return this.wallet.get('BR').gte(BigNumber.of(t.value));
+      case 'overdose':
+        return this.isOverdosing;
+    }
+  }
+
+  /** Hlas Algoritmu: emituje nové hlášky. `emit=false` jen tiše označí jako viděné (po loadu). */
+  private checkNarrative(emit = true): void {
+    for (const line of NARRATIVE) {
+      if (this.seenNarrative.has(line.id)) continue;
+      if (this.narrativeMet(line.trigger)) {
+        this.seenNarrative.add(line.id);
+        if (emit) this.bus.emit('AlgorithmSpeaks', { id: line.id, text: line.text });
+      }
+    }
+  }
+
   // ── Persistence & offline ───────────────────────────────────────────────────
 
   serialize(): SaveState {
@@ -1183,6 +1294,8 @@ export class Game implements Tickable {
         dopamineAllTime: this.lifetime.dopamineAllTime.serialize(),
       },
       run: { ...this.runStats },
+      achievements: [...this.unlockedAchievements],
+      narrative: [...this.seenNarrative],
     };
   }
 
@@ -1233,6 +1346,14 @@ export class Game implements Tickable {
     this.nextPhoneId = 1;
     const count = Math.max(1, Math.floor(data.phoneCount));
     for (let i = 0; i < count; i++) this.addPhone();
+
+    // Achievementy + narativ (F9): obnov ze save, pak tiše dorovnej už splněné (ať load nespamuje).
+    this.unlockedAchievements.clear();
+    for (const id of data.achievements ?? []) this.unlockedAchievements.add(id);
+    this.seenNarrative.clear();
+    for (const id of data.narrative ?? []) this.seenNarrative.add(id);
+    this.checkAchievements(false);
+    this.checkNarrative(false);
   }
 
   /**
@@ -1293,6 +1414,8 @@ export class Game implements Tickable {
     this.advanceAds(dt);
     this.advanceCaptchas(dt);
     this.checkPlatformUnlocks();
+    this.checkAchievements();
+    this.checkNarrative();
     this.runStats.seconds += dt;
   }
 

@@ -256,6 +256,20 @@ Parodie Spotify Wrapped — emocionální tečka resetu.
 - **Dystopické loading tipy** („Tip: Mrkání je ztráta času.").
 - **Fake patch notes** jako flavor („Text-It koupil miliardář a přejmenoval na ‚X'.").
 
+### 6.1 Implementováno (Fáze 9)
+**Hlas Algoritmu** (`content/narrative.ts`, data-driven): hlášky s deklarativním `trigger`
+(Dopamin/prestige/chaos/platformy/Brain Rot/Overdose), které `Game` vyhodnocuje a emituje
+`AlgorithmSpeaks` (každá jen jednou; po loadu se viděné tiše označí). Eskalují od „Keep scrolling,
+you're doing great" po „There is no bottom. I made sure of that." Harness = systémový banner pod
+topbarem. **Falešné ToS** (modal na 1. spuštění: „license to your soul", „there is no reject button")
+a **dystopické loading tipy** pod spinnerem (např. „Sleep is just offline mode for losers.").
+
+### 6.2 Achievementy (Fáze 9)
+`content/achievements.ts` (17, data-driven, `condition` = Dopamin/telefony/swipy/jackpoty/gemy/
+Brain Rot/Clarity/prestige/platformy/úroveň upgradu). `Game` je vyhodnocuje v ticku, emituje
+`AchievementUnlocked`, **trvalé** (přežijí prestige, save). UI: panel 🏆 + toasty. Skryté mají
+popis „???" dokud nejsou odemčené (`ai_slop`, `skibidi`). Save je zpětně kompatibilní.
+
 ## 7. (C1 obsah) Komentáře pro Komentářovou ruletu
 
 Datová sada `src/core/content/comments.json` (cílově ~100). Kategorie: `hot-take`,

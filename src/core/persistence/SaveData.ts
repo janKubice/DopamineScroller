@@ -26,4 +26,7 @@ export interface SaveState {
     dopamineAllTime: { m: number; e: number };
   };
   run?: { swipes: number; likes: number; comments: number; gems: number; jackpots: number; seconds: number };
+  // přidáno ve Fázi 9 (volitelné kvůli zpětné kompatibilitě)
+  achievements?: string[]; // id odemčených achievementů
+  narrative?: string[]; // id už viděných hlášek Algoritmu
 }

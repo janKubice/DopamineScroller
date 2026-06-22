@@ -3,10 +3,10 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav:** **Fáze 6 (Prestige) + Fáze 8 (juice) hotové** — Prestige/Clarity/Wrapped, minihry Skip-Ad +
-CAPTCHA; **V1** WebGL chaos shader (situační – ne na startu), **V2** cookie dark pattern, **V3** Skinner-box
-Like + slot-machine jackpot, **V4** color grading, **V5** fake-crash→Zen. ·
-větev `claude/serene-goodall-af920r` · **181 testů zelených**. Další: Fáze 9 (balanc do JSON, achievementy).
+**Stav:** 🎉 **Roadmapa F0–F9 hotová.** Naposledy **Fáze 9**: achievementy (17, data-driven, save),
+narativní **hlas Algoritmu** (C4) + falešné ToS + dystopické loading tipy. (Předtím F6 Prestige, F8 juice.) ·
+větev `claude/serene-goodall-af920r` · **191 testů zelených**. Volitelně dál: Outrage minihra, balanc do JSON,
+plný WebGL renderer, víc obsahu.
 
 ---
 
@@ -68,7 +68,8 @@ src/core/
   domain/      Phone.ts (FSM buffering/ready/swiping), Game.ts (★ orchestrátor, ~1300 řádků:
                + prestige/Clarity, minihry Skip-Ad/CAPTCHA, run/lifetime statistiky)
   content/     upgrades.ts (51 upgradů: Vlna 2 + Cosmetics + UpgradeDef.unlock/category + effectTotalLabel),
-               clarity.ts (6 Zen/Clarity meta-upgradů – prestige), platforms.ts (5 platforem),
+               clarity.ts (6 Zen/Clarity meta-upgradů – prestige), achievements.ts (17, F9),
+               narrative.ts (hlas Algoritmu, F9), platforms.ts (5 platforem),
                comments.json + CommentPool.ts (komentářová ruleta)
   persistence/ SaveData.ts (SaveState typ, **v2** s Clarity/lifetime/run)
 src/ui/        ChaosShader.ts (F8 V1 – raw WebGL fullscreen glitch overlay; graceful fallback)
@@ -211,8 +212,19 @@ kompatibilní). Minihry **Skip-Ad** + **CAPTCHA** (M4) – spawn dle vydělanéh
 - **Volitelně dál:** plný renderer rewrite (Pixi.js/raw WebGL místo DOM harnessu), nekonečný scrollbar /
   „úložiště plné" dark patterns. Shader glitch lze přitvrdit (alpha/blend) — teď je decentní a situační.
 
-### Pak: Fáze 9 (balanc do JSON, achievementy, narativní hlas Algoritmu, další minihry: Outrage, T3 loading).
-Backlog: `docs/TODO.md`. **Balanc prestige** (CLARITY_THRESHOLD/EXP, ceny Zen) je zatím odhad – chce playtest.
+### ✅ Fáze 9 — Polish & Balance — HOTOVÁ
+- ✅ **Achievementy** (`content/achievements.ts`, 17, data-driven `condition`): `Game.checkAchievements`
+  v ticku → `AchievementUnlocked`, **trvalé** (přežijí prestige, save, zpětně kompat.). UI: panel 🏆 + toasty.
+- ✅ **Narativní hlas Algoritmu** (`content/narrative.ts`): eskalující hlášky s `trigger`, `AlgorithmSpeaks`
+  (jednou; po loadu tiše označí). UI: systémový banner (pod topbarem, click-through). + **falešné ToS** modal
+  (1. spuštění) + **dystopické loading tipy** pod spinnerem.
+
+### 🎉 Roadmapa F0–F9 je kompletní. Volitelně dál:
+- **Outrage minihra** (M4 – provokativní post: „ENGAGE" za BR+Dopamin vs „Ignore"), stejný pattern jako Skip-Ad/CAPTCHA.
+- **Balanc konstant do JSON** (cross-cutting refactor; teď jsou nahoře v `Game.ts`/`content/*`). **Balanc prestige**
+  (CLARITY_THRESHOLD/EXP, ceny Zen) je zatím odhad – chce playtest.
+- Plný WebGL/Pixi renderer místo DOM harnessu; achievementové odměny; víc obsahu (platformy C1, hardware C3).
+Backlog: `docs/TODO.md`.
 
 ---
 
