@@ -1269,3 +1269,28 @@ describe('Game — save v2 (prestige perzistence)', () => {
     expect(restored.clarity.level('digital_monk')).toBe(0);
   });
 });
+
+describe('Game — dopamine meter (V4/V1 color grading & chaos)', () => {
+  it('je 0 v klidu a roste s Dopaminem/s, zastropováno na 1', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.dopamineMeter).toBe(0); // bez botů žádná produkce
+    game.wallet.add('DOP', BigNumber.of(1e9));
+    game.buy('auto_scroller', 5);
+    game.buy('fiber', 1);
+    for (let i = 0; i < 10; i++) game.addPhone();
+    expect(game.dopamineMeter).toBeGreaterThan(0);
+    expect(game.dopamineMeter).toBeLessThanOrEqual(1);
+  });
+
+  it('blízko Overdose se blíží 1', () => {
+    const game = new Game({ seed: 1, platforms: [
+      { id: 'x', name: 'X', icon: '✖️', basePostValue: 1e9, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+    ] });
+    game.wallet.add('DOP', BigNumber.of(1e12));
+    game.buy('auto_scroller', 10);
+    game.buy('fiber', 5);
+    for (let i = 0; i < 20; i++) game.addPhone();
+    expect(game.dopamineMeter).toBeGreaterThan(0.8);
+    expect(game.dopamineMeter).toBeLessThanOrEqual(1);
+  });
+});

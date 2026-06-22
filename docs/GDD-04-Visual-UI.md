@@ -33,9 +33,11 @@ Prezentace ho jen **interpretuje** na efekty (žádná logika chaosu v UI):
 > **WebGL vrstva:** glitch/stroboskop/saturace běží jako fullscreen **shader pass** nad DOM
 > kompozicí (Pixi.js nebo raw WebGL). Vstup shaderu = `chaosLevel` + `dopaminePerSec`.
 
-> 🟡 **Částečně implementováno (Fáze 5):** `Game.chaosLevel` (0–100) = f(telefony, Brain Rot
-> upgrady, tier platformy). Harness ho mapuje na saturaci + hue-rotate (`--chaos`) a nad prahem
-> na jemný glitch/chromatickou aberaci (`html.chaotic`). Plný WebGL shader pass je Fáze 8.
+> ✅ **Implementováno (Fáze 8):** `Game.chaosLevel` (0–100) = f(telefony, Brain Rot, tier platformy).
+> Harness ho mapuje na saturaci + hue-rotate (`--chaos`, `html.chaotic`) **a na reálný WebGL glitch
+> shader** (`src/ui/ChaosShader.ts`): fullscreen procedurální glitch (barevné scanline pásy, RGB šum,
+> vignetta) přes `mix-blend-mode`, intenzita = `chaosLevel` + `dopamineMeter`. Raw WebGL bez závislostí;
+> když WebGL chybí, `available=false` a je to no-op (graceful degradace).
 
 ## V2 — Diegetické dark patterns (UI prvky)
 
@@ -57,12 +59,20 @@ Barevné ladění celé obrazovky řízené aktuálním **Dopaminem/s**: klid = 
 se sytí a oteplují; u prahu Overdose vše do hyper-saturované červené/magenty. Jediný
 normalizovaný vstup → post-process LUT. Hráč „vidí" stav ekonomiky periferně.
 
+> ✅ **Implementováno (Fáze 8):** `Game.dopamineMeter` (0–1 = log10(DOP/s)/práh Overdose) řídí
+> fixní overlay `.color-grade` (`mix-blend-mode: overlay`, opacity ∝ metr); u `isOverdosing`
+> přepne na hyper-červenou pulzaci. Žádný filtr na předcích (kvůli `position:fixed` modalům).
+
 ## V5 — Overdose = fake crash → Zen Clarity (tonální whiplash)
 
 Při Overdose: simulovaný **fake OS crash / kernel panic / BSOD** → tvrdý střih do **naprosto
 klidné, minimalistické bílé** obrazovky Clarity (zde i „Doomscroll Wrapped", `GDD-03 §5.1`).
 Prestige obrazovka je *jediná* dobře navržená, tichá obrazovka ve hře. Kontrast chaos → zen
 je nejsilnější satirický moment loopu.
+
+> ✅ **Implementováno (Fáze 8):** na `Prestiged` se přehraje `playCrashSequence`: modrý **BSOD**
+> („:( DOPAMINE OVERDOSE … STOP CODE 0xDEAD5CR0LL", ~1.5 s, flicker) → tvrdý **bílý střih** (~0.45 s)
+> → klidný **Doomscroll Wrapped** modal. Tonální whiplash: horký glitch běh → modrý crash → bílé zen.
 
 ## 2. Obsah feedu (vizuál)
 

@@ -14,7 +14,7 @@ kdy je doména hotová a otestovaná.
 | **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | ✅ Virality → Hidden Gems, ✅ Platformy (Text-It → NeuralFeed), ✅ Brain Rot větev, ✅ **Synergie měn (M2)** (LCS → Reach/Engagement/Virality + Omnipresence). (content provider ~100 obrázků → Fáze 8) | ✅ |
 | **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, **Zen shop** (trvalé upgrady), perzistence Clarity, **Doomscroll Wrapped** | ✅ |
 | **F7 — Offline & Save** | „Zavřu a otevřu, progres zůstal" | localStorage save + autosave, verzování, **offline výpočet** (closed-form rate × čas, cap 8 h) — *předtaženo* | ✅ |
-| **F8 — UI & Juice** | „Vypadá to jako ta vize" | **Chaos Level (V1)** + WebGL shader overlay, **V3/V4** juice & color grading, **V2** dark patterns, audio, fixace rendereru (Pixi.js / raw WebGL) | ⬜ |
+| **F8 — UI & Juice** | „Vypadá to jako ta vize" | ✅ **V1** WebGL chaos shader, ✅ **V4** color grading, ✅ **V5** fake-crash→Zen, ✅ floating numbers/skiny (Vlna 2). Zbývá: **V2** dark patterns, **V3** Skinner-box like/slot-machine, full renderer | 🟡 |
 | **F9 — Polish & Balance** | „Hratelná satira" | Zbývající **minihry (M4)**: CAPTCHA, Skip-Ad, Outrage; balanc (konstanty jako data), achievementy, **Doomscroll Wrapped (C5)**, narativní hlas Algoritmu (C4) | ⬜ |
 
 ## Průřezové zásady (platí od F0)
@@ -44,4 +44,7 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
 - ✅ **F6 hotová** — **Prestige**: Dopamine Overdose → reset za **Clarity** (`clarityOnPrestige` = floor((total/1e6)^0.5)),
   **Zen shop** (trvalé Clarity upgrady v samostatném store), **Doomscroll Wrapped** (C5) shrnutí, save v2.
   Minihry **Skip-Ad** + **CAPTCHA** (M4) přidány. Clarity bonusy se NEstropují (na rozdíl od běhu, #5).
-- ⬜ **Další** — F8 (plné UI + WebGL chaos shader), F9 (balanc do JSON, zbylé minihry, achievementy).
+- 🟡 **F8 rozpracovaná** — ✅ V1 WebGL chaos shader (`src/ui/ChaosShader.ts`), ✅ V4 color grading
+  (`dopamineMeter`), ✅ V5 fake-crash→Zen. Zbývá V2 (dark patterns: cookie lišta, fake warning…),
+  V3 (Skinner-box Like + slot-machine jackpot), případně fixace rendereru.
+- ⬜ **Další** — F9 (balanc do JSON, zbylé minihry/achievementy, narativní hlas Algoritmu).

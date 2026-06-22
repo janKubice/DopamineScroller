@@ -1109,3 +1109,105 @@ html.disco body::before {
   color: #1c1c1c;
   cursor: pointer;
 }
+
+/* ── Fáze 8 (V1): WebGL chaos shader overlay ── */
+.chaos-shader {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 92;
+  pointer-events: none;
+  mix-blend-mode: hard-light;
+}
+.chaos-shader[hidden] {
+  display: none;
+}
+
+/* ── Fáze 8 (V4): color grading „dopamin metr" ── */
+.color-grade {
+  position: fixed;
+  inset: 0;
+  z-index: 91;
+  pointer-events: none;
+  opacity: calc(var(--dopa, 0) * 0.7);
+  background: radial-gradient(
+    125% 125% at 50% 28%,
+    rgba(255, 190, 40, 0.22),
+    rgba(255, 60, 0, 0.5) 65%,
+    rgba(180, 0, 90, 0.72)
+  );
+  mix-blend-mode: overlay;
+  transition: opacity 0.35s linear;
+}
+.color-grade.overdose {
+  mix-blend-mode: hard-light;
+  animation: grade-pulse 0.8s ease-in-out infinite;
+}
+@keyframes grade-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.35) saturate(1.3);
+  }
+}
+
+/* ── Fáze 8 (V5): fake crash (BSOD) → bílý střih ── */
+.crash {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 8vw;
+  background: #0a5bd3;
+  color: #fff;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  animation: crash-flicker 0.28s steps(2) infinite;
+}
+.crash[hidden] {
+  display: none;
+}
+.crash__face {
+  font-size: 84px;
+  line-height: 1;
+}
+.crash__title {
+  font-size: 28px;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.crash__body {
+  font-size: 18px;
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.4;
+}
+.crash__code {
+  font-size: 14px;
+  opacity: 0.8;
+  margin: 18px 0 0;
+}
+@keyframes crash-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.93;
+  }
+}
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: #fff;
+}
+.flash[hidden] {
+  display: none;
+}

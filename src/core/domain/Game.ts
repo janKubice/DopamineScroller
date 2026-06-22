@@ -969,6 +969,16 @@ export class Game implements Tickable {
     return dps.isPositive() && dps.log10() >= OVERDOSE_DPS_LOG10;
   }
 
+  /**
+   * Normalizovaný „dopamin metr" 0–1 = log10(Dopamin/s) / práh Overdose. Prezentace ho mapuje
+   * na color grading (V4) a sílu chaos shaderu (V1). 0 = klid, 1 = blízko Overdose.
+   */
+  get dopamineMeter(): number {
+    const dps = this.estimatedDopaminePerSecond;
+    if (!dps.isPositive()) return 0;
+    return Math.max(0, Math.min(1, dps.log10() / OVERDOSE_DPS_LOG10));
+  }
+
   /** Doživotní statistiky (přežijí prestige). */
   get lifetimeStats(): LifetimeStats {
     return { ...this.lifetime };

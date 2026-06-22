@@ -3,9 +3,9 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav:** **Fáze 6 (Prestige) HOTOVÁ** — Dopamine Overdose → Clarity, Zen shop, Doomscroll Wrapped,
-minihry Skip-Ad + CAPTCHA. (Před tím: Vlna 2 + polish.) · větev `claude/serene-goodall-af920r` ·
-**179 testů zelených**. Další: Fáze 8 (plné UI/WebGL) nebo Fáze 9 (balanc do JSON, achievementy).
+**Stav:** **Fáze 6 (Prestige) + část Fáze 8 (juice)** — Prestige/Clarity/Wrapped, minihry Skip-Ad +
+CAPTCHA; **V1 WebGL chaos shader**, **V4 color grading**, **V5 fake-crash→Zen**. ·
+větev `claude/serene-goodall-af920r` · **181 testů zelených**. Zbývá F8: V2 dark patterns, V3 Skinner Like.
 
 ---
 
@@ -70,6 +70,7 @@ src/core/
                clarity.ts (6 Zen/Clarity meta-upgradů – prestige), platforms.ts (5 platforem),
                comments.json + CommentPool.ts (komentářová ruleta)
   persistence/ SaveData.ts (SaveState typ, **v2** s Clarity/lifetime/run)
+src/ui/        ChaosShader.ts (F8 V1 – raw WebGL fullscreen glitch overlay; graceful fallback)
 src/audio/     SoundManager.ts (Web Audio, syntetizované tóny)
 src/persistence/ SaveManager.ts (localStorage + autosave; mimo doménu)
 src/main.ts    ★ dev harness (DOM) — DOČASNÉ UI, plné UI = Fáze 8
@@ -196,9 +197,17 @@ Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider h
 stropu**), **Doomscroll Wrapped** (C5), `Prestiged` event, save **v2** (clarity/lifetime/run, zpětně
 kompatibilní). Minihry **Skip-Ad** + **CAPTCHA** (M4) – spawn dle vydělaného Dopaminu, eventy `Ad*`/`Captcha*`.
 
-### Pak: Fáze 8 (plné UI + WebGL chaos shader), Fáze 9 (balanc do JSON, achievementy, narativní hlas, další minihry).
-Backlog: `docs/TODO.md` (T3 loading minihra zbývá; Outrage minihra). **Balanc prestige** (CLARITY_THRESHOLD/
-EXP, ceny Zen) je zatím odhad – chce playtest.
+### 🟡 Fáze 8 — UI & Juice — ROZPRACOVANÁ
+- ✅ **V1** WebGL chaos shader (`src/ui/ChaosShader.ts`) – fullscreen procedurální glitch přes
+  `mix-blend-mode: hard-light`, intenzita = `chaosLevel` + `dopamineMeter`. Bez závislostí, graceful fallback.
+- ✅ **V4** color grading – `Game.dopamineMeter` (0–1) → `.color-grade` overlay (teplé→hyper-červené u Overdose).
+- ✅ **V5** fake-crash→Zen – `playCrashSequence` (BSOD → bílý střih → Wrapped) na `Prestiged`.
+- **Zbývá:** **V2** dark patterns (cookie lišta, fake „virus" warning, nekonečný scrollbar…),
+  **V3** Skinner-box Like (eskalující částice + slot-machine jackpot animace), případně fixace
+  rendereru (Pixi.js/raw WebGL). Pozn.: shader glitch je zatím decentní – lze přitvrdit (alpha/blend).
+
+### Pak: Fáze 9 (balanc do JSON, achievementy, narativní hlas Algoritmu, další minihry: Outrage, T3 loading).
+Backlog: `docs/TODO.md`. **Balanc prestige** (CLARITY_THRESHOLD/EXP, ceny Zen) je zatím odhad – chce playtest.
 
 ---
 

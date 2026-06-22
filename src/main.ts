@@ -10,6 +10,7 @@ import { CURRENCIES, type CurrencyId } from './core/economy/currencies';
 import { UPGRADE_CATEGORIES } from './core/content/upgrades';
 import { SaveManager } from './persistence/SaveManager';
 import { SoundManager } from './audio/SoundManager';
+import { ChaosShader } from './ui/ChaosShader';
 
 const game = new Game({ seed: Date.now() & 0xffff });
 
@@ -634,11 +635,25 @@ function applyOverload(): void {
   }
 }
 
-// ── Chaos Level (V1): Brain Rot / scale damages the UI visually ──
-function applyChaos(): void {
+// ── Chaos Level (V1) + Color grading (V4): škálování & Dopamin/s poškozují/ladí obraz ──
+const chaos = new ChaosShader(); // WebGL glitch overlay (no-op když WebGL chybí)
+const colorGrade = document.createElement('div'); // V4: „dopamin metr" jako color grade
+colorGrade.className = 'color-grade';
+document.body.appendChild(colorGrade);
+
+function applyChaos(nowMs: number): void {
   const c = game.chaosLevel / 100; // 0..1
+  const meter = game.dopamineMeter; // 0..1
   document.documentElement.style.setProperty('--chaos', c.toFixed(3));
   document.documentElement.classList.toggle('chaotic', c > 0.5);
+
+  // V1: WebGL glitch sílí s chaosem a blízkostí Overdose.
+  chaos.setIntensity(Math.min(1, c * 0.85 + meter * 0.4));
+  chaos.render(nowMs / 1000);
+
+  // V4: obrazovka se „ohřívá" s Dopaminem/s; u Overdose do hyper-červené.
+  document.documentElement.style.setProperty('--dopa', meter.toFixed(3));
+  colorGrade.classList.toggle('overdose', game.isOverdosing);
 }
 
 game.bus.on('PlatformUnlocked', (e) => {
@@ -767,14 +782,48 @@ function showWrapped(s: Wrapped): void {
   }
 }
 
+// ── V5: Overdose = fake crash (BSOD) → bílý střih → klidné Zen Wrapped (tonální whiplash) ──
+const crashOverlay = document.createElement('div');
+crashOverlay.className = 'crash';
+crashOverlay.hidden = true;
+crashOverlay.innerHTML = `
+  <div class="crash__face">:(</div>
+  <p class="crash__title">DOPAMINE OVERDOSE</p>
+  <p class="crash__body">Your brain ran into a problem and needs to restart.<br />
+    We're just dumping your serotonin reserves, and then we'll reset for you.</p>
+  <p class="crash__code">STOP CODE: 0xDEAD5CR0LL · collecting feelings (0% complete)</p>`;
+document.body.appendChild(crashOverlay);
+const flashOverlay = document.createElement('div');
+flashOverlay.className = 'flash';
+flashOverlay.hidden = true;
+document.body.appendChild(flashOverlay);
+
+function playCrashSequence(done: () => void): void {
+  document.documentElement.classList.add('crashing'); // glitch shake přes CSS
+  crashOverlay.hidden = false;
+  window.setTimeout(() => {
+    crashOverlay.hidden = true;
+    document.documentElement.classList.remove('crashing');
+    flashOverlay.hidden = false; // tvrdý bílý střih
+    window.setTimeout(() => {
+      flashOverlay.hidden = true;
+      done();
+    }, 450);
+  }, 1500);
+}
+
 game.bus.on('Prestiged', (e) => {
-  sound.goodComment();
+  sound.badComment();
   // Reset prezentace: telefonní karty a aktivní minihry.
   for (const card of cards.values()) card.root.remove();
   cards.clear();
   hideAd();
   captchaModal.hidden = true;
-  showWrapped(e.summary as unknown as Wrapped);
+  const summary = e.summary as unknown as Wrapped;
+  playCrashSequence(() => {
+    sound.goodComment();
+    showWrapped(summary);
+  });
 });
 
 // ── Minihra Skip-Ad: banner s tlačítkem Skip ──
@@ -875,7 +924,7 @@ function frame(now: number): void {
   applyTheme();
   applyCosmetics();
   applyOverload();
-  applyChaos();
+  applyChaos(now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
