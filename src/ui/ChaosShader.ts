@@ -27,18 +27,18 @@ float noise(vec2 p) {
 
 void main() {
   float I = uIntensity;
-  if (I <= 0.001) { gl_FragColor = vec4(0.0); return; }
+  if (I <= 0.01) { gl_FragColor = vec4(0.0); return; }
   vec2 uv = gl_FragCoord.xy / uRes;
 
-  // Horizontální glitch pásy, které „skáčou" v čase.
+  // Horizontální glitch pásy, které „skáčou" v čase (méně časté = míň záchvatovité).
   float row = floor(uv.y * 48.0);
-  float band = step(0.96 - I * 0.18, hash(vec2(row, floor(uTime * 11.0))));
+  float band = step(0.985 - I * 0.2, hash(vec2(row, floor(uTime * 7.0))));
 
   // Chromatický barevný šum (RGB rozházené).
   vec3 chroma = vec3(
-    noise(uv * 220.0 + uTime * 38.0 + 1.0),
-    noise(uv * 220.0 + uTime * 38.0 + 7.0),
-    noise(uv * 220.0 + uTime * 38.0 + 13.0)
+    noise(uv * 220.0 + uTime * 30.0 + 1.0),
+    noise(uv * 220.0 + uTime * 30.0 + 7.0),
+    noise(uv * 220.0 + uTime * 30.0 + 13.0)
   );
 
   // Scanlines.
@@ -47,10 +47,11 @@ void main() {
   // Vignetta (efekt silnější u krajů).
   float vig = smoothstep(1.25, 0.35, distance(uv, vec2(0.5)));
 
+  // VŠE škáluje s I → při nízké intenzitě je obrazovka čistá (žádné blikání na startu).
   float a = 0.0;
-  a += noise(uv * 90.0 + uTime * 20.0) * 0.05 * I;     // jemný základní šum
-  a += band * (0.22 + 0.45 * I);                        // glitch pásy
-  a *= mix(0.75, 1.25, vig);                            // zvýraznit kraje
+  a += noise(uv * 90.0 + uTime * 16.0) * 0.06 * I; // jemný šum
+  a += band * (0.7 * I);                            // glitch pásy (bez konstantní podlahy!)
+  a *= mix(0.75, 1.25, vig);                        // zvýraznit kraje
 
   vec3 col = mix(chroma, vec3(scan), 0.45);
   gl_FragColor = vec4(col, clamp(a, 0.0, 0.8));
@@ -97,7 +98,7 @@ export class ChaosShader {
     // Šetři: při nulové intenzitě vyčisti na průhledno a nekresli šum.
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (this.intensity <= 0.001) return;
+    if (this.intensity <= 0.01) return; // pod prahem nic nekresli (čistá obrazovka)
     gl.useProgram(this.program);
     gl.uniform1f(this.uTime, timeSec);
     gl.uniform1f(this.uIntensity, this.intensity);

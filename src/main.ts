@@ -250,6 +250,9 @@ function renderCard(id: number, card: PhoneCard): void {
       if (game.like(id)) {
         likeBtn.classList.add('is-active');
         likeBtn.disabled = true;
+        // V3: Skinner-box fontána — víc srdíček s víc nasbíranými Likes (eskalace odměny).
+        const likeTier = Math.min(10, 3 + Math.floor(game.wallet.get('LIK').log10()));
+        spawnHearts(id, likeTier);
       }
     });
     const commentBtn = card.actions.querySelector<HTMLButtonElement>('[data-act="comment"]')!;
@@ -496,6 +499,62 @@ function screenShake(): void {
   window.setTimeout(() => document.documentElement.classList.remove('shaking'), 420);
 }
 
+// ── V3: Like jako Skinner box — fontána srdíček z telefonu (jen manuální like) ──
+function spawnHearts(phoneId: number, count: number): void {
+  const card = cards.get(phoneId);
+  if (!card || floatLayer.childElementCount >= MAX_FLOATS) return;
+  const r = card.root.getBoundingClientRect();
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'heart';
+    el.textContent = ['❤️', '💖', '💕', '💗'][i % 4]!;
+    el.style.left = `${r.left + r.width / 2 + (Math.random() * 60 - 30)}px`;
+    el.style.top = `${r.top + r.height * 0.5}px`;
+    el.style.setProperty('--dx', `${Math.random() * 60 - 30}px`);
+    el.style.animationDelay = `${Math.random() * 0.12}s`;
+    floatLayer.appendChild(el);
+    window.setTimeout(() => el.remove(), 1300);
+  }
+}
+
+// ── V3: Jackpot = slot machine (přiznaná satira variabilní odměny) ──
+const SLOT_SYMBOLS = ['🍒', '🍋', '🔔', '💎', '7️⃣', '🧠'];
+const slot = document.createElement('div');
+slot.className = 'slot';
+slot.hidden = true;
+slot.innerHTML =
+  `<div class="slot__reels"><span class="slot__r">🎰</span><span class="slot__r">🎰</span><span class="slot__r">🎰</span></div>` +
+  `<div class="slot__pay" id="slotPay"></div>`;
+document.body.appendChild(slot);
+const slotReels = Array.from(slot.querySelectorAll<HTMLElement>('.slot__r'));
+const slotPay = slot.querySelector<HTMLElement>('#slotPay')!;
+let slotShowing = false;
+
+function showJackpotSlot(payout: string): void {
+  if (slotShowing) return; // nepřekrývej běžící
+  slotShowing = true;
+  slot.hidden = false;
+  slot.classList.add('is-spin');
+  slotPay.textContent = '';
+  const sym = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]!;
+  // krátké „roztočení" (cyklování symbolů), pak dosednutí na 3× stejný symbol
+  let ticks = 0;
+  const spin = window.setInterval(() => {
+    ticks++;
+    for (const r of slotReels) r.textContent = SLOT_SYMBOLS[Math.floor(Math.random() * SLOT_SYMBOLS.length)]!;
+    if (ticks > 9) {
+      window.clearInterval(spin);
+      for (const r of slotReels) r.textContent = sym;
+      slot.classList.remove('is-spin');
+      slotPay.textContent = `JACKPOT! +${payout} 🧠`;
+      window.setTimeout(() => {
+        slot.hidden = true;
+        slotShowing = false;
+      }, 900);
+    }
+  }, 70);
+}
+
 // ── Domain events → sound + visual feedback ──
 game.bus.on('SwipeResolved', (e) => {
   sound.swipe();
@@ -529,6 +588,7 @@ game.bus.on('Jackpot', (e) => {
   spawnFloat(e.phoneId, `🎰 +${e.dopamine.format()}`, 'jackpot');
   confetti(24);
   screenShake();
+  showJackpotSlot(e.dopamine.format()); // V3: slot-machine flourish
 });
 game.bus.on('UpgradePurchased', (e) => {
   sound.upgrade();
@@ -647,11 +707,14 @@ function applyChaos(nowMs: number): void {
   document.documentElement.style.setProperty('--chaos', c.toFixed(3));
   document.documentElement.classList.toggle('chaotic', c > 0.5);
 
-  // V1: WebGL glitch sílí s chaosem a blízkostí Overdose.
-  chaos.setIntensity(Math.min(1, c * 0.85 + meter * 0.4));
+  // V1: WebGL glitch je SITUAČNÍ — náběh až od vysokého chaosu (~55 %) a u Overdose.
+  // Early/mid hra = čistá obrazovka (žádné blikání na startu). Viz GDD-04 §V1 (glitch = 60–100).
+  const fromChaos = Math.max(0, (c - 0.55) / 0.45);
+  const fromMeter = Math.max(0, (meter - 0.65) / 0.35) * 0.6;
+  chaos.setIntensity(Math.min(1, fromChaos + fromMeter));
   chaos.render(nowMs / 1000);
 
-  // V4: obrazovka se „ohřívá" s Dopaminem/s; u Overdose do hyper-červené.
+  // V4: obrazovka se „ohřívá" s Dopaminem/s; u Overdose do hyper-červené (plynule, ne blikání).
   document.documentElement.style.setProperty('--dopa', meter.toFixed(3));
   colorGrade.classList.toggle('overdose', game.isOverdosing);
 }
@@ -903,11 +966,62 @@ game.bus.on('CaptchaResolved', (e) => {
   }
 });
 
+// ── V2: Diegetické dark patterns ──
+// Cookie lišta (parodie consent dark patternu: obří „Accept All", drobné šedé „Reject").
+function showCookieBar(): void {
+  if (localStorage.getItem('cookies-accepted')) return;
+  const bar = document.createElement('div');
+  bar.className = 'cookie-bar';
+  bar.innerHTML = `
+    <span class="cookie-bar__text">🍪 We value your privacy. We and our <b>1,847 partners</b> store cookies
+      to harvest your attention, sell your soul, and personalize the void.</span>
+    <div class="cookie-bar__btns">
+      <button class="cookie-bar__reject" id="ckReject">Reject (manage 1,847 vendors)</button>
+      <button class="cookie-bar__accept" id="ckAccept">Accept All</button>
+    </div>`;
+  document.body.appendChild(bar);
+  bar.querySelector('#ckAccept')!.addEventListener('click', () => {
+    localStorage.setItem('cookies-accepted', '1');
+    bar.remove();
+  });
+  // Dark pattern: „Reject" se brání – uhne myši a tváří se, že něco dělá.
+  const reject = bar.querySelector<HTMLButtonElement>('#ckReject')!;
+  let dodges = 0;
+  reject.addEventListener('mouseenter', () => {
+    if (dodges++ < 3) reject.style.transform = `translateX(${Math.random() * 80 - 40}px)`;
+  });
+  reject.addEventListener('click', () => {
+    reject.textContent = 'Loading vendor preferences…';
+    window.setTimeout(() => (reject.textContent = 'Reject (manage 1,847 vendors)'), 1200);
+  });
+}
+
+// Občasné falešné „engagement" notifikace (gated: až od 5 telefonů, řídké – ne furt).
+const FAKE_NOTES = [
+  '🔔 12 people you don\'t know liked your post',
+  '⚠️ You\'ve been scrolling for a while. That\'s totally fine. Keep going.',
+  '📵 Your friends are hanging out without you. See photos?',
+  '🔥 Your streak is in danger! Don\'t break the chain.',
+  '👀 Someone screenshotted your profile (not really)',
+  '🧠 New brain-rot just dropped. You wouldn\'t want to miss out.',
+];
+function scheduleFakeNote(): void {
+  const delay = 35000 + Math.random() * 25000; // 35–60 s
+  window.setTimeout(() => {
+    if (game.phones.length >= 5) {
+      pushNote(FAKE_NOTES[Math.floor(Math.random() * FAKE_NOTES.length)]!, 'note--dislike', 4200);
+    }
+    scheduleFakeNote();
+  }, delay);
+}
+
 // ── Boot ──
 buildUpgrades();
 buildPlatforms();
 applyTheme();
 applyCosmetics();
+showCookieBar();
+scheduleFakeNote();
 if (offlineResult) showOfflineToast(offlineResult);
 saver.startAutosave(() => game.serialize(), 5000);
 window.addEventListener('beforeunload', () => saver.save(game.serialize()));

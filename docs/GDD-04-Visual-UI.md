@@ -38,6 +38,8 @@ Prezentace ho jen **interpretuje** na efekty (žádná logika chaosu v UI):
 > shader** (`src/ui/ChaosShader.ts`): fullscreen procedurální glitch (barevné scanline pásy, RGB šum,
 > vignetta) přes `mix-blend-mode`, intenzita = `chaosLevel` + `dopamineMeter`. Raw WebGL bez závislostí;
 > když WebGL chybí, `available=false` a je to no-op (graceful degradace).
+> **Glitch je SITUAČNÍ** — náběh až od ~55 % chaosu (a u Overdose), takže **early/mid hra = čistá
+> obrazovka, žádné blikání na startu** (per eskalace 60–100). Vše ve shaderu škáluje s intenzitou na 0.
 
 ## V2 — Diegetické dark patterns (UI prvky)
 
@@ -47,11 +49,20 @@ Okamžitě čitelná satira poskládaná z reálných DOM prvků:
 - **Nekonečný scrollbar** — táhlo se zmenšuje, jak scrolluješ, ale **nikdy nedojede dolů**.
 - **„Úložiště plné" / „Slabá baterie"** na telefonu → zpomalí ho, dokud „nedokoupíš úložiště".
 
+> ✅ **Implementováno (Fáze 8):** **cookie consent lišta** (boot, persistovaná v localStorage):
+> obří zelené „Accept All" vs. drobné šedé „Reject (manage 1,847 vendors)", které **uhýbá myši**
+> a tváří se, že „načítá preference". Plus **občasné falešné engagement notifikace** (gated od 5
+> telefonů, řídké – ne furt). Nekonečný scrollbar / „úložiště plné" zůstávají jako další nápady.
+
 ## V3 — Like button jako Skinner box (variabilní odměna)
 
 Tlačítko Like vizuálně **eskaluje** s upgrady: prostý palec → částice srdíček → fontána →
 výbuch přes celou obrazovku → **animace výplaty jako automat**. Mechanicky: Like dává většinou
 ×1, vzácně **jackpot ×50** s plnou slot-machine animací. Přiznaná satira variabilního posilovacího schématu.
+
+> ✅ **Implementováno (Fáze 8):** manuální Like spustí **fontánu srdíček** (`spawnHearts`), počet
+> roste s nasbíranými Likes (eskalace). **Jackpot** (crit swipe) spustí **slot-machine** flourish
+> (`showJackpotSlot`: roztočení 3 válců → dosednutí na 3× symbol → „JACKPOT! +N 🧠") + konfety + shake.
 
 ## V4 — Color grading jako „dopamin metr"
 

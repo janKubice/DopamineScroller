@@ -1211,3 +1211,129 @@ html.disco body::before {
 .flash[hidden] {
   display: none;
 }
+
+/* ── Fáze 8 (V3): Skinner-box Like fontána srdíček ── */
+.heart {
+  position: fixed;
+  font-size: 22px;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: heart-rise 1.3s ease-out forwards;
+  z-index: 56;
+}
+@keyframes heart-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -95%) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx, 0px)), -250%) scale(0.9);
+  }
+}
+
+/* ── Fáze 8 (V3): Jackpot slot machine ── */
+.slot {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 115;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 22px;
+  background: #1a1030;
+  border: 3px solid #ffd43b;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 212, 59, 0.5);
+}
+.slot[hidden] {
+  display: none;
+}
+.slot__reels {
+  display: flex;
+  gap: 10px;
+}
+.slot__r {
+  width: 60px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  background: #fff;
+  border-radius: 10px;
+}
+.slot.is-spin .slot__r {
+  animation: slot-blur 0.12s linear infinite;
+}
+@keyframes slot-blur {
+  50% {
+    filter: blur(1.5px);
+    transform: translateY(-3px);
+  }
+}
+.slot__pay {
+  font-weight: 900;
+  font-size: 20px;
+  color: #ffd43b;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  min-height: 24px;
+}
+
+/* ── Fáze 8 (V2): cookie consent dark pattern ── */
+.cookie-bar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: #14161c;
+  color: #e8e8ea;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+}
+.cookie-bar__text {
+  max-width: 62ch;
+  line-height: 1.4;
+}
+.cookie-bar__btns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cookie-bar__reject {
+  font: inherit;
+  font-size: 11px;
+  background: transparent;
+  color: #6b6b6b;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.cookie-bar__accept {
+  font: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  background: #2f9e44;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 26px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(47, 158, 68, 0.5);
+}
