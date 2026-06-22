@@ -31,7 +31,7 @@ export type UpgradeEffectType =
   | 'bandwidthMult'; // násobí celkovou kapacitu sítě
 
 /** Kategorie pro UI (vyjížděcí panel #9). Odvozená z efektu/měny – viz `categoryOf`. */
-export type UpgradeCategory = 'hardware' | 'algorithms' | 'network' | 'bots' | 'brainrot';
+export type UpgradeCategory = 'hardware' | 'algorithms' | 'network' | 'bots' | 'cosmetics' | 'brainrot';
 
 /** Pořadí a popisky kategorií pro panel upgradů. */
 export const UPGRADE_CATEGORIES: ReadonlyArray<{ id: UpgradeCategory; label: string; icon: string }> = [
@@ -39,14 +39,17 @@ export const UPGRADE_CATEGORIES: ReadonlyArray<{ id: UpgradeCategory; label: str
   { id: 'algorithms', label: 'Algorithms', icon: '🧠' },
   { id: 'network', label: 'Network', icon: '📶' },
   { id: 'bots', label: 'Bots', icon: '🤖' },
+  { id: 'cosmetics', label: 'Cosmetics', icon: '🎨' },
   { id: 'brainrot', label: 'Brain Rot', icon: '🧟' },
 ];
 
-/** Zařadí upgrade do kategorie pro UI (data-driven; Brain Rot dle měny, jinak dle efektu). */
+/** Zařadí upgrade do kategorie pro UI (explicitní `category`, jinak odvozeno z efektu/měny). */
 export function categoryOf(def: UpgradeDef): UpgradeCategory {
+  if (def.category) return def.category;
   if (def.cost.currency === 'BR') return 'brainrot';
   switch (def.effect.type) {
     case 'addPhone':
+    case 'bufferSpeedMult': // rychlost načítání telefonu = hardware
       return 'hardware';
     case 'bandwidth':
     case 'bandwidthMult':
@@ -58,6 +61,51 @@ export function categoryOf(def: UpgradeDef): UpgradeCategory {
     default:
       return 'algorithms';
   }
+}
+
+/** Metadata efektu pro lidsky čitelný „aktuální bonus" na kartě upgradu (#B). */
+const EFFECT_META: Record<
+  UpgradeEffectType,
+  { kind: 'mul' | 'add' | 'flag'; unit: string; percent?: boolean }
+> = {
+  dopamineMultiplier: { kind: 'mul', unit: 'Dopamine' },
+  addPhone: { kind: 'add', unit: 'phones' },
+  bandwidth: { kind: 'add', unit: 'Mbps' },
+  bandwidthMult: { kind: 'mul', unit: 'bandwidth' },
+  autoLikeRate: { kind: 'add', unit: 'likes/s' },
+  autoSwipeRate: { kind: 'add', unit: 'swipes/s' },
+  autoCommentRate: { kind: 'add', unit: 'comments/s' },
+  bubbleUnlock: { kind: 'flag', unit: 'minigame' },
+  bubbleValueMult: { kind: 'mul', unit: 'bubble value' },
+  bubbleRate: { kind: 'mul', unit: 'bubble rate' },
+  virality: { kind: 'add', unit: 'virality' },
+  consumptionMultiplier: { kind: 'mul', unit: 'bandwidth use' },
+  bufferSpeedMult: { kind: 'mul', unit: 'load speed' },
+  attentionMaxMult: { kind: 'mul', unit: 'max Attention' },
+  attentionRegenMult: { kind: 'mul', unit: 'Attention regen' },
+  streakCapBonus: { kind: 'add', unit: 'streak cap' },
+  critChance: { kind: 'add', unit: 'jackpot chance', percent: true },
+  critMult: { kind: 'add', unit: 'jackpot ×' },
+  offlineEfficiencyBonus: { kind: 'add', unit: 'offline mining', percent: true },
+  offlineCapHours: { kind: 'add', unit: 'h offline cap' },
+};
+
+function trimNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(n < 1 ? 2 : 1);
+}
+
+/** Lidsky čitelný souhrn AKTUÁLNÍHO bonusu upgradu na dané úrovni (prázdný řetězec = bez úrovní). */
+export function effectTotalLabel(def: UpgradeDef, level: number): string {
+  if (level <= 0) return '';
+  const meta = EFFECT_META[def.effect.type];
+  if (!meta) return '';
+  if (meta.kind === 'flag') return 'active';
+  if (meta.kind === 'mul') {
+    return `×${Math.pow(def.effect.value, level).toFixed(2)} ${meta.unit}`.trim();
+  }
+  const total = def.effect.value * level;
+  if (meta.percent) return `+${Math.round(total * 100)}% ${meta.unit}`.trim();
+  return `+${trimNum(total)} ${meta.unit}`.trim();
 }
 
 /** Podmínka odemčení upgradu (postupné odemykání stromu, T6/#4). */
@@ -93,6 +141,8 @@ export interface UpgradeDef {
   };
   /** Volitelná podmínka odemčení (jinak je upgrade dostupný od začátku). */
   readonly unlock?: UpgradeUnlock;
+  /** Volitelné vynucení kategorie pro UI (jinak odvozeno z efektu/měny). */
+  readonly category?: UpgradeCategory;
 }
 
 export const UPGRADES: readonly UpgradeDef[] = [
@@ -113,6 +163,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     cost: { currency: 'DOP', base: 25, multiplier: 1 },
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.1 },
+    category: 'cosmetics',
   },
   {
     id: 'dopamine_detector',
@@ -341,13 +392,20 @@ export const UPGRADES: readonly UpgradeDef[] = [
 
   // ── Vlna 2 — nové typy efektů (pre-prestige „wow" upgrady, postupně odemykané) ──
   {
+    id: 'fresh_battery',
+    name: 'Close Background Apps',
+    description: 'Frees up your phone. Posts load +10% faster per level (faster buffering).',
+    icon: '🔋',
+    cost: { currency: 'DOP', base: 45, multiplier: 1.3 },
+    effect: { type: 'bufferSpeedMult', value: 1.1 },
+  },
+  {
     id: 'gigabit_thumbs',
     name: 'Gigabit Thumbs',
-    description: '+15% buffering speed per level. Posts load faster — feed never rests.',
+    description: 'Upgrade your phone: posts load +15% faster per level. The feed never rests.',
     icon: '⚡',
-    cost: { currency: 'DOP', base: 500, multiplier: 1.4 },
+    cost: { currency: 'DOP', base: 400, multiplier: 1.4 },
     effect: { type: 'bufferSpeedMult', value: 1.15 },
-    unlock: { dopamine: 350 },
   },
   {
     id: 'predictive_preload',
@@ -436,6 +494,95 @@ export const UPGRADES: readonly UpgradeDef[] = [
     maxLevel: 4,
     effect: { type: 'bandwidthMult', value: 2 },
     unlock: { dopamine: 30000, requires: 'fiber' },
+  },
+
+  // ── Cosmetics / Juice (vizuální „skiny" – paroduje placení za vzhled; každý dá i malý bonus) ──
+  {
+    id: 'neon_mode',
+    name: 'Neon Mode',
+    description: 'Glowing neon everything. Pretty AND addictive. +15% Dopamine.',
+    icon: '🌈',
+    cost: { currency: 'DOP', base: 200, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.15 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'crt_filter',
+    name: 'Retro CRT Filter',
+    description: 'Nostalgic scanlines for that 90s screen-time. +12% Dopamine.',
+    icon: '📺',
+    cost: { currency: 'DOP', base: 350, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.12 },
+    unlock: { dopamine: 300 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'confetti_cannon',
+    name: 'Confetti Cannon',
+    description: 'Rare posts explode in 3× the confetti. Celebrate the void. +10% Dopamine.',
+    icon: '🎉',
+    cost: { currency: 'DOP', base: 500, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.1 },
+    unlock: { dopamine: 500 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'combo_text',
+    name: 'Floating Combo Text',
+    description: 'Bigger, juicier dopamine numbers fly off your phones. +10% Dopamine.',
+    icon: '💥',
+    cost: { currency: 'DOP', base: 800, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.1 },
+    unlock: { dopamine: 800 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'vaporwave',
+    name: 'Vaporwave Aesthetic',
+    description: 'A E S T H E T I C. Pink-and-cyan synthwave grid. +20% Dopamine.',
+    icon: '🌴',
+    cost: { currency: 'DOP', base: 1500, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.2 },
+    unlock: { dopamine: 2000 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'screen_shake',
+    name: 'Haptic Overdrive',
+    description: 'Jackpots physically shake the whole screen. Feel the dopamine. +15% Dopamine.',
+    icon: '📳',
+    cost: { currency: 'DOP', base: 2000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.15 },
+    unlock: { dopamine: 3000 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'gold_rush',
+    name: 'Gold Everything',
+    description: 'Recolors the UI in tasteless gold. You have made it. +25% Dopamine.',
+    icon: '🏆',
+    cost: { currency: 'DOP', base: 4000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.25 },
+    unlock: { dopamine: 8000 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'disco_ball',
+    name: 'Disco Ball Mode',
+    description: 'The whole background slowly cycles through every color. +20% Dopamine.',
+    icon: '🪩',
+    cost: { currency: 'DOP', base: 6000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.2 },
+    unlock: { dopamine: 15000 },
+    category: 'cosmetics',
   },
 
   // ── Brain Rot větev (za 🧟 BR z TokTik+) — velký boost, ale poškozuje UI (chaos) ──

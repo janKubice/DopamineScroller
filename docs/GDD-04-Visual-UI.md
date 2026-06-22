@@ -99,9 +99,16 @@ Než přijde plné UI (Fáze 8), dev harness už ukazuje principy:
   🎮 RGB → 🖥️ Bot Farma): rámeček/pozadí + ikonka zařízení, takže farma vizuálně „roste". Čistě
   prezentační (doména telefony nerozlišuje); plný juice (V1/V3) zůstává pro Fázi 8.
 - **Vyjížděcí panel upgradů (#9)** — místo spodní lišty boční drawer (FAB 🛒 + odznak „kolik teď
-  koupíš"), upgrady **seskupené do kategorií** Hardware/Algorithms/Network/Bots/Brain Rot
+  koupíš"), upgrady **seskupené do kategorií** Hardware/Algorithms/Network/Bots/Cosmetics/Brain Rot
   (`UpgradeView.category` ← `categoryOf`). Prázdné kategorie se schovají, zamčené (#4) teaserují.
-- **Dark Mode** — upgrade 🌙 přepne celé UI do tmavého motivu (CSS proměnné + třída `html.dark`).
+- **Bohaté karty upgradů (#B)** — každá karta nese **popis (co dělá)** + **aktuální celkový bonus**
+  (`now ×N.NN …` / `+N …` přes `UpgradeView.effectTotal` ← `effectTotalLabel`) + úroveň + cenu.
+  Upgrady telefonů (rychlost načítání) jsou v **Hardware** a dostupné brzy (jeden bez zámku).
+- **Floating combat text (#4 late-game „život")** — čísla Dopaminu vyletí z telefonů při swipu
+  (zlatá u vzácných, `🎰` u jackpotu), karta krátce „cinkne", rarita postu má barvu. Strop `MAX_FLOATS`.
+- **Kosmetické skiny (#3)** — vlastněný upgrade přepne třídu na `<html>`: 🌈 Neon, 📺 CRT scanlines,
+  🌴 Vaporwave, 🏆 Gold, 🪩 Disco (+ juice: 🎉 Confetti Cannon, 💥 bigger floats, 📳 jackpot shake).
+  Každý dá i malý bonus (satira placení za vzhled). Dark Mode 🌙 je teď taky v Cosmetics.
 - **Síťové indikátory** — upgrady ukazují `📶 ±X`, HUD `📶 spotřeba/kapacita` + ⚠️ při přetížení.
 - **Jackpot (V3 základ)** — crit swipe (upgrade 🎰 Jackpot Algorithm) vyplatí násobek, harness
   ukáže `🎰 JACKPOT ×N` notifikaci + konfety + zvuk (event `Jackpot`). Plná slot-machine animace = Fáze 8.

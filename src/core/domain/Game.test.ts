@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Game, REACTION_WINDOW, expectedRarityMultiplier, OFFLINE_EFFICIENCY, MAX_OFFLINE_SECONDS } from './Game';
 import { BigNumber } from '../math/BigNumber';
 import type { PlatformDef } from '../content/platforms';
-import { categoryOf, UPGRADE_CATEGORIES, type UpgradeDef } from '../content/upgrades';
+import { categoryOf, effectTotalLabel, UPGRADE_CATEGORIES, type UpgradeDef } from '../content/upgrades';
 
 /** Posune hru do okamžiku, kdy je telefon 1 ve stavu ready. */
 function advanceToReady(game: Game): void {
@@ -778,8 +778,9 @@ describe('Game — postupné odemykání upgradů (T6)', () => {
   it('reálná data: threshold upgrade nelze koupit z napumpovaného zůstatku', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(1e9));
-    expect(game.buy('gigabit_thumbs', 1)).toBe(0); // práh 350 vydělaného Dopaminu nesplněn
-    expect(game.upgradeView().find((u) => u.id === 'gigabit_thumbs')!.locked).toBe(true);
+    // meditation_app má práh 500 VYDĚLANÉHO Dopaminu – napumpovaný zůstatek nestačí.
+    expect(game.buy('meditation_app', 1)).toBe(0);
+    expect(game.upgradeView().find((u) => u.id === 'meditation_app')!.locked).toBe(true);
   });
 
   it('reálná data: threshold upgrade se odemkne vyděláním Dopaminu (boti)', () => {
@@ -788,11 +789,11 @@ describe('Game — postupné odemykání upgradů (T6)', () => {
     game.buy('auto_scroller', 10);
     game.buy('fiber', 1);
     for (let i = 0; i < 12; i++) game.addPhone();
-    expect(game.isUnlocked('gigabit_thumbs')).toBe(false);
-    for (let i = 0; i < 5000 && game.totalDopamineEarned.toNumber() < 350; i++) game.advance(0.1);
-    expect(game.totalDopamineEarned.toNumber()).toBeGreaterThanOrEqual(350);
-    expect(game.isUnlocked('gigabit_thumbs')).toBe(true);
-    expect(game.buy('gigabit_thumbs', 1)).toBe(1);
+    expect(game.isUnlocked('meditation_app')).toBe(false); // práh 500
+    for (let i = 0; i < 5000 && game.totalDopamineEarned.toNumber() < 500; i++) game.advance(0.1);
+    expect(game.totalDopamineEarned.toNumber()).toBeGreaterThanOrEqual(500);
+    expect(game.isUnlocked('meditation_app')).toBe(true);
+    expect(game.buy('meditation_app', 1)).toBe(1);
   });
 });
 
@@ -1008,6 +1009,7 @@ describe('Game — rebalance měkkým stropem produkce (#5)', () => {
 describe('categoryOf — kategorie upgradů (#9)', () => {
   it('řadí podle efektu a měny', () => {
     expect(categoryOf(up('p', { type: 'addPhone', value: 1 }))).toBe('hardware');
+    expect(categoryOf(up('spd', { type: 'bufferSpeedMult', value: 1.1 }))).toBe('hardware'); // rychlost telefonu
     expect(categoryOf(up('b', { type: 'bandwidth', value: 1 }))).toBe('network');
     expect(categoryOf(up('bm', { type: 'bandwidthMult', value: 2 }))).toBe('network');
     expect(categoryOf(up('s', { type: 'autoSwipeRate', value: 1 }))).toBe('bots');
@@ -1017,6 +1019,10 @@ describe('categoryOf — kategorie upgradů (#9)', () => {
     ).toBe('brainrot');
   });
 
+  it('explicitní category má přednost před odvozením', () => {
+    expect(categoryOf(up('c', { type: 'dopamineMultiplier', value: 1.1 }, { category: 'cosmetics' }))).toBe('cosmetics');
+  });
+
   it('každý reálný upgrade má platnou kategorii a UpgradeView ji nese', () => {
     const game = new Game({ seed: 1 });
     const view = game.upgradeView();
@@ -1024,5 +1030,33 @@ describe('categoryOf — kategorie upgradů (#9)', () => {
     for (const u of view) {
       expect(UPGRADE_CATEGORIES.some((c) => c.id === u.category)).toBe(true);
     }
+  });
+});
+
+describe('effectTotalLabel — aktuální bonus na kartě (#B)', () => {
+  it('Lv 0 = prázdný řetězec', () => {
+    expect(effectTotalLabel(up('m', { type: 'dopamineMultiplier', value: 1.1 }), 0)).toBe('');
+  });
+  it('multiplikativní efekt: ×value^level', () => {
+    expect(effectTotalLabel(up('m', { type: 'dopamineMultiplier', value: 1.1 }), 3)).toBe('×1.33 Dopamine');
+    expect(effectTotalLabel(up('s', { type: 'bufferSpeedMult', value: 1.15 }), 2)).toBe('×1.32 load speed');
+  });
+  it('aditivní efekt: +value*level s jednotkou', () => {
+    expect(effectTotalLabel(up('b', { type: 'bandwidth', value: 10 }), 4)).toBe('+40 Mbps');
+    expect(effectTotalLabel(up('sw', { type: 'autoSwipeRate', value: 0.5 }), 3)).toBe('+1.5 swipes/s');
+  });
+  it('procentuální efekt (jackpot/offline)', () => {
+    expect(effectTotalLabel(up('j', { type: 'critChance', value: 0.05 }), 4)).toBe('+20% jackpot chance');
+    expect(effectTotalLabel(up('o', { type: 'offlineEfficiencyBonus', value: 0.1 }), 3)).toBe('+30% offline mining');
+  });
+  it('flag efekt (odemčení minihry)', () => {
+    expect(effectTotalLabel(up('d', { type: 'bubbleUnlock', value: 1 }), 1)).toBe('active');
+  });
+  it('UpgradeView nese effectTotal podle úrovně', () => {
+    const game = new Game({ seed: 1, upgrades: [up('m', { type: 'dopamineMultiplier', value: 1.1 })] });
+    expect(game.upgradeView()[0]!.effectTotal).toBe('');
+    game.wallet.add('DOP', BigNumber.of(1000));
+    game.buy('m', 2);
+    expect(game.upgradeView()[0]!.effectTotal).toBe('×1.21 Dopamine');
   });
 });

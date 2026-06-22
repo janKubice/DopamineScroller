@@ -3,8 +3,9 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav:** **Vlna 2 hotová** (T6 odemykání, nové typy efektů, panel upgradů #9, varianty zařízení #8,
-rebalance #5) · větev `claude/serene-goodall-af920r` · **158 testů zelených**. Další: Fáze 6 (Prestige).
+**Stav:** **Vlna 2 + polish hotové** (T6 odemykání, nové efekty, panel #9, varianty zařízení #8,
+rebalance #5; + bohaté karty #B, floating numbers, kosmetické skiny, discoverability telefonů) ·
+větev `claude/serene-goodall-af920r` · **165 testů zelených**. Další: Fáze 6 (Prestige).
 
 ---
 
@@ -64,7 +65,8 @@ src/core/
                CostCurve.ts (exp. ceny), UpgradeStore.ts (úrovně+ceny),
                Bandwidth.ts (load/bufferScale)
   domain/      Phone.ts (FSM buffering/ready/swiping), Game.ts (★ orchestrátor, ~900 řádků)
-  content/     upgrades.ts (42 upgradů vč. Vlny 2 + UpgradeDef.unlock), platforms.ts (5 platforem),
+  content/     upgrades.ts (51 upgradů: Vlna 2 + Cosmetics + UpgradeDef.unlock/category + effectTotalLabel),
+               platforms.ts (5 platforem),
                comments.json + CommentPool.ts (komentářová ruleta)
   persistence/ SaveData.ts (SaveState typ)
 src/audio/     SoundManager.ts (Web Audio, syntetizované tóny)
@@ -171,8 +173,21 @@ Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider h
   v log prostoru: pod prahem (×1e6) beze změny, nad ním klesající výnos (`softCapLog10`,
   `PRODUCTION_SOFTCAP_LOG10`/`PRODUCTION_COMPRESSION`). HUD `⚙️ ×… 🧱`. „Od jisté fáze se hra nezlomí."
 
-> ⚠️ **UI Vlny 2 (#8/#9) je build-verified, ne vizuálně** (v prostředí nebyl prohlížeč). Doména
-> (#4/#5/#6/#7) je plně testovaná (158 zelených). Při dalším sezení projet harness očima.
+### ✅ Polish round (další zpětná vazba hráče) — HOTOVÁ
+- ✅ **Upgrady telefonů jsou k nalezení** — `bufferSpeedMult` přesunut do **Hardware** kategorie,
+  `fresh_battery`/`gigabit_thumbs` bez zámku (hned je čím zrychlit telefon).
+- ✅ **Bohaté karty (#B)** — `UpgradeView.effectTotal` (`effectTotalLabel`): karta ukáže popis *co dělá*
+  + **aktuální celkový bonus** (`now ×N.NN …`) + úroveň + cenu.
+- ✅ **Late-game „život" (#4)** — floating combat text (čísla vyletí z telefonů, zlatá u vzácných,
+  `🎰` u jackpotu), barvy rarity, „cinknutí" karty. Méně „80 točících se kostiček".
+- ✅ **Kosmetické skiny + minihry/efekty (#3)** — 8 nových vizuálních upgradů (Neon/CRT/Vaporwave/Gold/
+  Disco + Confetti Cannon/Combo Text/Haptic shake), Dark Mode přesunut do Cosmetics. Detail `GDD-04 §5`.
+
+> 🔎 **Vizuálně ověřeno**: tato session měla v prostředí **headless Chromium (puppeteer)** —
+> harness se renderoval do screenshotů (initial / late-game / drawer). Puppeteer je jen lokální
+> nástroj (**NENÍ v `package.json`**). Reprodukce: `npm i -D puppeteer && npx puppeteer browsers
+> install chrome`, pak `vite preview` + krátký skript (debug hook `window.__dev` se přidává jen
+> dočasně a před commitem se maže).
 
 ### Pak: Fáze 6 — Prestige (Dopamine Overdose)
 Overdose trigger (kritický DOP/s nebo milník) → kolaps/reset → **Clarity** měna → Zen shop

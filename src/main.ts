@@ -168,6 +168,7 @@ function renderHud(): void {
 
 // ── Phone farm (one card per phone) ──
 interface PhoneCard {
+  root: HTMLElement;
   screen: HTMLElement;
   actions: HTMLElement;
   lastKey: string;
@@ -211,6 +212,7 @@ function createCard(id: number): PhoneCard {
     `<div class="phone__screen"></div><div class="actions"></div>`;
   phonesContainer.appendChild(root);
   const card: PhoneCard = {
+    root,
     screen: root.querySelector('.phone__screen')!,
     actions: root.querySelector('.actions')!,
     lastKey: '',
@@ -223,7 +225,8 @@ function renderCard(id: number, card: PhoneCard): void {
   const p = game.phones.find((x) => x.id === id);
   if (!p) return;
   if (p.isReady) {
-    card.screen.innerHTML = `<div class="post">${game.activePlatform.icon}<br /><small>${p.post!.rarity}</small></div>`;
+    const rarity = p.post!.rarity;
+    card.screen.innerHTML = `<div class="post post--${rarity}">${game.activePlatform.icon}<br /><small>${rarity}</small></div>`;
     card.actions.innerHTML = `
       <button class="icon-btn act" data-act="like" title="Like">👍</button>
       <button class="icon-btn act" data-act="comment" title="Comment">💬</button>
@@ -279,14 +282,17 @@ function clearChoices(): void {
   choices.innerHTML = '';
 }
 
-// ── Upgrade panel (#9): tlačítka seskupená do kategorií ──
+// ── Upgrade panel (#9): tlačítka seskupená do kategorií, s popisem a aktuálním bonusem (#B) ──
 function upgradeButtonHtml(u: { id: string; icon: string; name: string; description: string }): string {
   return `
-    <button class="upg" data-id="${u.id}" title="${escapeHtml(u.description)} (Shift = ×10)">
+    <button class="upg" data-id="${u.id}" title="Shift-click = buy ×10">
       <span class="upg__icon">${u.icon}</span>
-      <span class="upg__name">${escapeHtml(u.name)}</span>
-      <span class="upg__meta">
-        <span class="upg__lvl"></span><span class="upg__cost"></span><span class="upg__net"></span>
+      <span class="upg__body">
+        <span class="upg__head"><span class="upg__name">${escapeHtml(u.name)}</span><span class="upg__lvl"></span></span>
+        <span class="upg__desc">${escapeHtml(u.description)}</span>
+        <span class="upg__meta">
+          <span class="upg__total"></span><span class="upg__cost"></span><span class="upg__net"></span>
+        </span>
       </span>
     </button>`;
 }
@@ -327,10 +333,12 @@ function refreshUpgrades(): void {
     const lvl = btn.querySelector('.upg__lvl')!;
     const cost = btn.querySelector('.upg__cost')!;
     const net = btn.querySelector<HTMLElement>('.upg__net')!;
+    const total = btn.querySelector<HTMLElement>('.upg__total')!;
 
     // #4 zamčený teaser: místo ceny ukážeme požadavek na odemčení a zakážeme nákup.
     if (u.locked) {
       lvl.textContent = '';
+      total.textContent = '';
       cost.textContent = u.unlockHint ?? '🔒';
       net.textContent = '';
       btn.disabled = true;
@@ -339,6 +347,8 @@ function refreshUpgrades(): void {
     }
 
     lvl.textContent = u.maxed ? 'MAX' : u.level > 0 ? `Lv ${u.level}` : '';
+    // #B aktuální celkový bonus (jen když už něco vlastníš)
+    total.textContent = u.effectTotal ? `now ${u.effectTotal}` : '';
     cost.textContent = u.maxed ? '' : `${CURRENCIES[u.costCurrency].symbol} ${u.cost.format()}`;
     if (u.networkKind === 'uses') {
       net.textContent = `📶 −${u.networkDelta}`;
@@ -427,8 +437,57 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
+// ── #4 Floating combat text: čísla Dopaminu vyletí z telefonů (late-game „život") ──
+const floatLayer = document.createElement('div');
+floatLayer.className = 'floats';
+document.body.appendChild(floatLayer);
+const MAX_FLOATS = 36; // strop, ať se DOM nezahltí při stovkách swipů/s
+
+function spawnFloat(phoneId: number, text: string, kind: 'dop' | 'gem' | 'jackpot'): void {
+  if (floatLayer.childElementCount >= MAX_FLOATS) return;
+  const big = kind !== 'dop' || game.upgrades.level('combo_text') > 0;
+  const el = document.createElement('div');
+  el.className = `float float--${kind}${big ? ' float--big' : ''}`;
+  el.textContent = text;
+  let x = window.innerWidth / 2;
+  let y = window.innerHeight * 0.4;
+  const card = cards.get(phoneId);
+  if (card) {
+    const r = card.root.getBoundingClientRect();
+    x = r.left + r.width / 2 + (Math.random() * 44 - 22);
+    y = r.top + r.height * 0.32;
+  }
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  floatLayer.appendChild(el);
+  window.setTimeout(() => el.remove(), 1100);
+}
+
+// #8/#4 krátké „cinknutí" karty při swipu (jen občas, ať to při 80 telefonech neseká)
+let lastPulse = 0;
+function pulseCard(phoneId: number): void {
+  const now = performance.now();
+  if (now - lastPulse < 60) return;
+  lastPulse = now;
+  const card = cards.get(phoneId);
+  if (!card) return;
+  card.root.classList.add('is-pop');
+  window.setTimeout(() => card.root.classList.remove('is-pop'), 200);
+}
+
+// Haptic Overdrive (cosmetic): jackpot roztřese obrazovku.
+function screenShake(): void {
+  if (game.upgrades.level('screen_shake') === 0) return;
+  document.documentElement.classList.add('shaking');
+  window.setTimeout(() => document.documentElement.classList.remove('shaking'), 420);
+}
+
 // ── Domain events → sound + visual feedback ──
-game.bus.on('SwipeResolved', () => sound.swipe());
+game.bus.on('SwipeResolved', (e) => {
+  sound.swipe();
+  spawnFloat(e.phoneId, `+${e.dopamine.format()}`, e.rarity === 'common' ? 'dop' : 'gem');
+  pulseCard(e.phoneId);
+});
 game.bus.on('Liked', () => sound.like());
 game.bus.on('CommentPosted', () => sound.comment());
 game.bus.on('CommentReaction', (e) => sound.reactionTick(e.kind === 'like'));
@@ -445,13 +504,17 @@ const CONFETTI_BY_RARITY: Record<string, number> = { rare: 14, epic: 30, legenda
 game.bus.on('HiddenGemFound', (e) => {
   sound.gem();
   pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000);
-  confetti(CONFETTI_BY_RARITY[e.rarity] ?? 12);
+  // Confetti Cannon (cosmetic): 3× konfety na vzácných postech.
+  const cannon = game.upgrades.level('confetti_cannon') > 0 ? 3 : 1;
+  confetti((CONFETTI_BY_RARITY[e.rarity] ?? 12) * cannon);
 });
 // Vlna 2: jackpot (crit) swipe — velká výplata, ať to „cinkne".
 game.bus.on('Jackpot', (e) => {
   sound.gem();
   pushNote(`🎰 JACKPOT ×${e.multiplier}! +${e.dopamine.format()} 🧠`, 'note--gem', 2800);
+  spawnFloat(e.phoneId, `🎰 +${e.dopamine.format()}`, 'jackpot');
   confetti(24);
+  screenShake();
 });
 game.bus.on('UpgradePurchased', (e) => {
   sound.upgrade();
@@ -528,6 +591,20 @@ function applyTheme(): void {
   document.documentElement.classList.toggle('dark', game.upgrades.level('dark_mode') > 0);
 }
 
+// ── Cosmetic skins (#3): vlastněný upgrade přepne vizuální třídu na <html> ──
+const COSMETIC_CLASSES: ReadonlyArray<[id: string, cls: string]> = [
+  ['neon_mode', 'neon'],
+  ['crt_filter', 'crt'],
+  ['vaporwave', 'vaporwave'],
+  ['gold_rush', 'gold'],
+  ['disco_ball', 'disco'],
+];
+function applyCosmetics(): void {
+  for (const [id, cls] of COSMETIC_CLASSES) {
+    document.documentElement.classList.toggle(cls, game.upgrades.level(id) > 0);
+  }
+}
+
 // ── FIX2: visible penalty when the network is overloaded ──
 const overloadBanner = document.createElement('div');
 overloadBanner.className = 'overload-banner';
@@ -565,6 +642,7 @@ game.bus.on('PlatformChanged', (e) => {
 buildUpgrades();
 buildPlatforms();
 applyTheme();
+applyCosmetics();
 if (offlineResult) showOfflineToast(offlineResult);
 saver.startAutosave(() => game.serialize(), 5000);
 window.addEventListener('beforeunload', () => saver.save(game.serialize()));
@@ -579,6 +657,7 @@ function frame(now: number): void {
   refreshUpgrades();
   refreshPlatforms();
   applyTheme();
+  applyCosmetics();
   applyOverload();
   applyChaos();
   requestAnimationFrame(frame);

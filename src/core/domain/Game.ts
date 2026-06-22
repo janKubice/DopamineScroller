@@ -7,7 +7,7 @@ import { SAVE_VERSION, type SaveState } from '../persistence/SaveData';
 import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
-import { UPGRADES, categoryOf, type UpgradeDef, type UpgradeCategory } from '../content/upgrades';
+import { UPGRADES, categoryOf, effectTotalLabel, type UpgradeDef, type UpgradeCategory } from '../content/upgrades';
 import { PLATFORMS, DEFAULT_PLATFORM_ID, type PlatformDef } from '../content/platforms';
 import {
   Phone,
@@ -80,6 +80,8 @@ export interface UpgradeView {
   unlockHint?: string;
   /** Kategorie pro vyjížděcí panel (#9). */
   category: UpgradeCategory;
+  /** Lidsky čitelný souhrn AKTUÁLNÍHO bonusu na dané úrovni (#B), prázdný na Lv 0. */
+  effectTotal: string;
 }
 
 /** View model platformy pro prezentaci (přepínač sítí). */
@@ -716,6 +718,7 @@ export class Game implements Tickable {
         visible: unlock.visible,
         unlockHint: unlock.locked ? unlock.hint : undefined,
         category: categoryOf(def),
+        effectTotal: effectTotalLabel(def, this.upgrades.level(def.id)),
       };
     });
   }

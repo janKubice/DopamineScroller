@@ -114,8 +114,8 @@ Upgrady jsou **data-driven** (`src/core/content/upgrades.ts`, typ `UpgradeDef`):
 > 📰 **Fake News Syndicate** (DOP 5000, +1.5 virality, max 1). Vyšší virality = víc Rare/Epic/
 > Legendary postů (`Game.virality`, efekt `virality`).
 
-> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **42 upgradů** (vč. Vlny 2,
-> viz §3.2, a Brain Rot větve §4.2) seřazených
+> **Rozšířený roster (early/mid pacing):** v `upgrades.ts` je nyní **51 upgradů** (vč. Vlny 2 §3.2,
+> Cosmetics §3.3 a Brain Rot větve §4.2) seřazených
 > od nejlevnějšího — první (🥤 Energy Drink) je dostupný už za **10 DOP**, takže hned je co
 > kupovat. Mix: levné dopamine-multiplikátory (Dark Mode, Push Notifications, Infinite Scroll,
 > For You Page, Verified Badge, Algorithm Whisperer…), early auto-tapper (Finger Warm-Up),
@@ -159,7 +159,8 @@ mid/late strom + celou Vlnu 2 (prahy Dopaminu). Early upgrady zůstávají bez z
 
 | id | Název | Měna · base · mult | Efekt | Odemčení |
 |---|---|---|---|---|
-| `gigabit_thumbs` | ⚡ Gigabit Thumbs | DOP · 500 · 1.4 | +15 % buffering/lvl | 350 🧠 |
+| `fresh_battery` | 🔋 Close Background Apps | DOP · 45 · 1.3 | +10 % buffering/lvl | — (early) |
+| `gigabit_thumbs` | ⚡ Gigabit Thumbs | DOP · 400 · 1.4 | +15 % buffering/lvl (telefon) | — (early) |
 | `predictive_preload` | 🔮 Predictive Preload | DOP · 9000 · 1.5 | +25 % buffering/lvl | 12k 🧠 + Gigabit Thumbs Lv3 |
 | `meditation_app` | 🧘 Meditation App | DOP · 600 · 1.45 | +50 % regen Pozornosti/lvl | 500 🧠 |
 | `adderall` | 💊 Off-Brand Adderall | DOP · 1200 · 1.5 | +40 % max Pozornost/lvl (max 8) | 900 🧠 |
@@ -169,6 +170,20 @@ mid/late strom + celou Vlnu 2 (prahy Dopaminu). Early upgrady zůstávají bez z
 | `time_dilation` | ⏳ Time-Dilation Field | DOP · 5000 · 1.5 | +10 % offline efektivita/lvl (max 5) | 5k 🧠 |
 | `cloud_backup` | ☁️ Cloud Backup | DOP · 7000 · 1.5 | +2 h offline cap/lvl (max 6) | 6k 🧠 |
 | `data_center` | 🏢 Personal Data Center | DOP · 25000 · 1.7 | ×2 kapacita sítě/lvl (max 4) | 30k 🧠 + Fiber Optics |
+
+### 3.3 Cosmetics & čitelnost karet (pre-prestige polish)
+
+**Kosmetické skiny** (kategorie `cosmetics`, `category` natvrdo): vlastněný upgrade přepne vizuální
+třídu UI a dá malý bonus Dopaminu (satira placení za vzhled). 🌙 Dark Mode, 🌈 Neon, 📺 CRT, 🌴 Vaporwave,
+🏆 Gold, 🪩 Disco + „juice" 🎉 Confetti Cannon / 💥 Floating Combo Text / 📳 Haptic Overdrive (jackpot shake).
+Harness je čte podle `id` (jako Dark Mode) — žádné nové efekt-typy. Detaily vizuálu `GDD-04 §5`.
+
+**Čitelnost karet (#B):** `UpgradeView.effectTotal` (← `effectTotalLabel(def, level)`) dává lidsky
+čitelný **aktuální** bonus (`×N.NN Dopamine`, `+N Mbps`, `+N% jackpot chance`, `active`…). Karta ukazuje
+popis *co dělá* + tento souhrn + úroveň + cenu.
+
+**Kategorie & discoverability:** `categoryOf` řadí `bufferSpeedMult` (rychlost telefonu) do **Hardware**
+vedle `addPhone`; `fresh_battery`/`gigabit_thumbs` jsou bez zámku (hned je čím „upgradovat telefon").
 
 ## 4. Temná větev: Brain Rot
 
