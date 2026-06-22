@@ -1060,3 +1060,212 @@ describe('effectTotalLabel — aktuální bonus na kartě (#B)', () => {
     expect(game.upgradeView()[0]!.effectTotal).toBe('×1.21 Dopamine');
   });
 });
+
+// ── Fáze 6: Prestige + minihry ────────────────────────────────────────────────
+
+/** Platforma s vysokým base Dopaminem (rychlé vydělání na práh prestige/miniher). */
+function richPlatform(basePostValue: number): PlatformDef[] {
+  return [
+    { id: 'x', name: 'X', icon: '✖️', basePostValue, bandwidthPerPhone: 1, viralityBonus: 0, brainRotPerSwipe: 0, unlockAtDopamine: 0 },
+  ];
+}
+
+describe('Game — prestige / Dopamine Overdose (Fáze 6)', () => {
+  it('na startu nelze prestižovat (0 Clarity)', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.clarityOnPrestige().isZero()).toBe(true);
+    expect(game.canPrestige).toBe(false);
+    expect(game.prestige()).toBeNull();
+  });
+
+  it('po nasbírání Dopaminu lze prestižovat → Clarity + reset běhu', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    readyAndSwipe(game); // ~1e8 vydělaného Dopaminu → ratio 100 → ~10 Clarity
+    expect(game.canPrestige).toBe(true);
+    const gain = game.clarityOnPrestige();
+    expect(gain.gte(BigNumber.ONE)).toBe(true);
+
+    game.wallet.add('DOP', BigNumber.of(123)); // i utracený/přidaný zůstatek se vynuluje
+    const summary = game.prestige()!;
+    expect(summary).not.toBeNull();
+    expect(summary.clarityGained.eq(gain)).toBe(true);
+    expect(summary.swipes).toBeGreaterThanOrEqual(1);
+
+    // Clarity připsána, běh resetován.
+    expect(game.wallet.get('CLA').eq(gain)).toBe(true);
+    expect(game.wallet.get('DOP').isZero()).toBe(true);
+    expect(game.totalDopamineEarned.isZero()).toBe(true);
+    expect(game.phones).toHaveLength(1);
+    expect(game.canPrestige).toBe(false);
+    expect(game.lifetimeStats.prestiges).toBe(1);
+  });
+
+  it('prestige vynuluje běhové upgrady, ale Clarity store zůstává', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('clickbait', 3);
+    expect(game.upgrades.level('clickbait')).toBe(3);
+    readyAndSwipe(game);
+    game.prestige();
+    expect(game.upgrades.level('clickbait')).toBe(0); // běhové upgrady pryč
+  });
+
+  it('emituje Prestiged s Doomscroll Wrapped', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    let summary: { clarityGained: BigNumber; swipes: number } | null = null;
+    game.bus.on('Prestiged', (e) => (summary = e.summary));
+    readyAndSwipe(game);
+    game.prestige();
+    expect(summary).not.toBeNull();
+  });
+});
+
+describe('Game — Clarity (Zen) upgrady', () => {
+  it('buyClarity utratí Clarity a trvale boostuje produkci', () => {
+    const game = new Game({ seed: 1 });
+    expect(game.buyClarity('digital_monk', 1)).toBe(0); // bez Clarity nelze
+    game.wallet.add('CLA', BigNumber.of(100));
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1, 5);
+    expect(game.buyClarity('digital_monk', 1)).toBe(1); // ×1.1
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.1, 5);
+    expect(game.wallet.get('CLA').toNumber()).toBeLessThan(100);
+  });
+
+  it('Clarity virality a buffer se přičítají k běhovým hodnotám', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('CLA', BigNumber.of(100));
+    expect(game.virality).toBe(0);
+    game.buyClarity('inner_eye', 2); // +1.0 virality
+    expect(game.virality).toBeCloseTo(1, 5);
+    expect(game.bufferSpeedMultiplier).toBeCloseTo(1, 5);
+    game.buyClarity('cleared_cache', 1); // ×1.12 buffer
+    expect(game.bufferSpeedMultiplier).toBeCloseTo(1.12, 5);
+  });
+
+  it('Clarity upgrady přežijí prestige', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    game.wallet.add('CLA', BigNumber.of(100));
+    game.buyClarity('digital_monk', 1);
+    readyAndSwipe(game);
+    game.prestige();
+    expect(game.clarity.level('digital_monk')).toBe(1); // trvalé
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.1, 5);
+  });
+
+  it('Clarity produkce se NEstropuje měkkým stropem (na rozdíl od běhu)', () => {
+    const game = new Game({ seed: 1, clarityUpgrades: [
+      { id: 'mega', name: 'Mega', description: '', icon: '', cost: { currency: 'CLA', base: 1, multiplier: 1 }, effect: { type: 'dopamineMultiplier', value: 10 } },
+    ] });
+    game.wallet.add('CLA', BigNumber.of(100));
+    game.buyClarity('mega', 8); // ×1e8 z Clarity
+    expect(game.productionMultiplier.log10()).toBeCloseTo(8, 5); // bez stropu
+  });
+});
+
+describe('Game — minihra Skip-Ad (M4)', () => {
+  it('reklamy se objeví až po odemčení a skip dá odměnu', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(600) });
+    expect(game.adsUnlocked).toBe(false);
+    let spawned: { id: number } | null = null;
+    game.bus.on('AdSpawned', (e) => (spawned ??= e));
+    for (let i = 0; i < 200; i++) game.advance(0.2); // 40 s, ale zamčeno
+    expect(spawned).toBeNull();
+
+    readyAndSwipe(game); // ~600 vydělaného Dopaminu → odemčeno
+    expect(game.adsUnlocked).toBe(true);
+    for (let i = 0; i < 250 && spawned === null; i++) game.advance(0.2);
+    expect(spawned).not.toBeNull();
+
+    const before = game.wallet.get('DOP').toNumber();
+    const reward = game.skipAd((spawned as unknown as { id: number }).id);
+    expect(reward).not.toBeNull();
+    expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before);
+    expect(game.activeAd).toBeNull();
+  });
+
+  it('reklama po čase expiruje (bez odměny)', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(600) });
+    readyAndSwipe(game);
+    let spawnedId: number | null = null;
+    let expiredId: number | null = null;
+    game.bus.on('AdSpawned', (e) => (spawnedId ??= e.id));
+    game.bus.on('AdExpired', (e) => (expiredId = e.id));
+    for (let i = 0; i < 250 && spawnedId === null; i++) game.advance(0.2);
+    expect(spawnedId).not.toBeNull();
+    for (let i = 0; i < 50; i++) game.advance(0.2); // > AD_LIFETIME
+    expect(expiredId).toBe(spawnedId);
+  });
+});
+
+describe('Game — minihra CAPTCHA (M4)', () => {
+  function spawnCaptcha(game: Game): { id: number; cells: boolean[] } {
+    let spawned: { id: number; cells: boolean[] } | null = null;
+    game.bus.on('CaptchaSpawned', (e) => (spawned ??= e));
+    for (let i = 0; i < 400 && spawned === null; i++) game.advance(0.2);
+    expect(spawned).not.toBeNull();
+    return spawned as unknown as { id: number; cells: boolean[] };
+  }
+
+  it('správné řešení dá odměnu, špatné ne', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(6000) });
+    expect(game.captchasUnlocked).toBe(false);
+    readyAndSwipe(game); // ~6000 → odemčeno
+    expect(game.captchasUnlocked).toBe(true);
+
+    // špatné řešení
+    const c1 = spawnCaptcha(game);
+    const wrong = c1.cells[0] ? [] : [0]; // záměrně neodpovídá
+    const before1 = game.wallet.get('DOP').toNumber();
+    expect(game.solveCaptcha(c1.id, wrong)).toBe(false);
+    expect(game.wallet.get('DOP').toNumber()).toBe(before1);
+    expect(game.activeCaptcha).toBeNull();
+
+    // správné řešení (přesně dlaždice s cells=true)
+    const c2 = spawnCaptcha(game);
+    const correct = c2.cells.map((c, i) => (c ? i : -1)).filter((i) => i >= 0);
+    const before2 = game.wallet.get('DOP').toNumber();
+    expect(game.solveCaptcha(c2.id, correct)).toBe(true);
+    expect(game.wallet.get('DOP').toNumber()).toBeGreaterThan(before2);
+  });
+});
+
+describe('Game — save v2 (prestige perzistence)', () => {
+  it('Clarity upgrady, lifetime a run stats přežijí round-trip', () => {
+    const game = new Game({ seed: 1 });
+    game.wallet.add('CLA', BigNumber.of(50));
+    game.buyClarity('digital_monk', 2);
+    advanceToReady(game);
+    game.swipe(1); // run stat swipe
+
+    const snap = game.serialize();
+    expect(snap.version).toBe(2);
+
+    const restored = new Game({ seed: 9 });
+    restored.loadSave(snap);
+    expect(restored.clarity.level('digital_monk')).toBe(2);
+    expect(restored.productionMultiplier.toNumber()).toBeCloseTo(1.21, 5);
+    expect(restored.wallet.get('CLA').toNumber()).toBeCloseTo(game.wallet.get('CLA').toNumber(), 0);
+  });
+
+  it('lifetime.prestiges přežije save/load', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    readyAndSwipe(game);
+    game.prestige();
+    const restored = new Game({ seed: 2, platforms: richPlatform(1e8) });
+    restored.loadSave(game.serialize());
+    expect(restored.lifetimeStats.prestiges).toBe(1);
+  });
+
+  it('starý save (v1 bez Clarity/lifetime) se načte s defaulty', () => {
+    const game = new Game({ seed: 1 });
+    const snap = game.serialize();
+    // simuluj v1: odeber pole přidaná ve Fázi 6
+    delete (snap as { clarityUpgrades?: unknown }).clarityUpgrades;
+    delete (snap as { lifetime?: unknown }).lifetime;
+    delete (snap as { run?: unknown }).run;
+    const restored = new Game({ seed: 2 });
+    restored.loadSave(snap);
+    expect(restored.lifetimeStats.prestiges).toBe(0);
+    expect(restored.clarity.level('digital_monk')).toBe(0);
+  });
+});

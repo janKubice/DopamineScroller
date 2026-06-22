@@ -12,7 +12,7 @@ kdy je doména hotová a otestovaná.
 | **F3 — Bandwidth** | „Síť mě reálně omezuje" | Total vs. Consumption, **penalizační křivka** (exp. zpomalení), network upgrady (📡☎️🛜). QoS alokace (M5) → odloženo | ✅ |
 | **F4 — Automatizace** | „Hra se hraje sama" | Boti **obsluhují telefony** (Auto-Liker/Scroller/Commenter) dle levelu, škálují s počtem telefonů, **Bandwidth náklad**, viditelný postih přetížení, **Pozornost (M1)**. (drobnost: streak bot-floor) | ✅ |
 | **F5 — Obsah** | „Platformy se vyvíjejí, padají Gemy" | ✅ Virality → Hidden Gems, ✅ Platformy (Text-It → NeuralFeed), ✅ Brain Rot větev, ✅ **Synergie měn (M2)** (LCS → Reach/Engagement/Virality + Omnipresence). (content provider ~100 obrázků → Fáze 8) | ✅ |
-| **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, Zen shop, perzistence Clarity | ⬜ |
+| **F6 — Prestige** | „Loop se uzavírá" | **Dopamine Overdose** trigger + reset, výpočet **Clarity**, **Zen shop** (trvalé upgrady), perzistence Clarity, **Doomscroll Wrapped** | ✅ |
 | **F7 — Offline & Save** | „Zavřu a otevřu, progres zůstal" | localStorage save + autosave, verzování, **offline výpočet** (closed-form rate × čas, cap 8 h) — *předtaženo* | ✅ |
 | **F8 — UI & Juice** | „Vypadá to jako ta vize" | **Chaos Level (V1)** + WebGL shader overlay, **V3/V4** juice & color grading, **V2** dark patterns, audio, fixace rendereru (Pixi.js / raw WebGL) | ⬜ |
 | **F9 — Polish & Balance** | „Hratelná satira" | Zbývající **minihry (M4)**: CAPTCHA, Skip-Ad, Outrage; balanc (konstanty jako data), achievementy, **Doomscroll Wrapped (C5)**, narativní hlas Algoritmu (C4) | ⬜ |
@@ -41,4 +41,7 @@ Toto je priorita *designové důležitosti* (featured status, jistota zařazení
 - ✅ **F4 hotová** — boti obsluhují telefony (liker/scroller/commenter, škálují s telefony), viditelný postih sítě, **Pozornost (M1)**.
 - ✅ **F7 hotová (předtaženo)** — save/load do localStorage + autosave + offline těžba (cap 8 h).
 - ✅ **F5 hotová** — Virality/Hidden Gems, platformy (Text-It → NeuralFeed), Brain Rot větev, **Synergie měn (M2)**.
-- ⬜ **Další** — F6: Prestige (Dopamine Overdose → Clarity, Zen shop, Doomscroll Wrapped).
+- ✅ **F6 hotová** — **Prestige**: Dopamine Overdose → reset za **Clarity** (`clarityOnPrestige` = floor((total/1e6)^0.5)),
+  **Zen shop** (trvalé Clarity upgrady v samostatném store), **Doomscroll Wrapped** (C5) shrnutí, save v2.
+  Minihry **Skip-Ad** + **CAPTCHA** (M4) přidány. Clarity bonusy se NEstropují (na rozdíl od běhu, #5).
+- ⬜ **Další** — F8 (plné UI + WebGL chaos shader), F9 (balanc do JSON, zbylé minihry, achievementy).

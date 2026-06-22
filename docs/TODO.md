@@ -13,6 +13,11 @@ legendary 70) + zvuk. Plný juice (V3) zůstává pro Fázi 8.
 Efekt `virality`; `Game.virality` = base + upgrady. 👁️ Third Eye (+0.5/lvl), 📰 Fake News
 Syndicate (+1.5). Vyšší virality → víc Hidden Gems.
 
+### ✅ M4 — Minihry Skip-Ad & CAPTCHA  `[hotovo · Fáze 6]`
+Skip-Ad (📺 „Sponsored", `skipAd` → odměna) a CAPTCHA (🤖 „Select all 🚦", `solveCaptcha` → odměna
+za přesný výběr) se objevují po prazích vydělaného Dopaminu. Domain: `advanceAds`/`advanceCaptchas`,
+eventy `Ad*`/`Captcha*`. Zbylé minihry (Outrage, Skip-Ad varianty) lze přidat stejným patternem.
+
 ### ⬜ T3 — Minihra během načítání (satira na neudržení pozornosti)  `[Fáze 9 · M4]`
 Když je telefon ve stavu `buffering`, nabídnout **rychlou tap/clicker minihru** („tap for extra
 dopamine") — hráč nevydrží čekat. Dává malý bonus Dopaminu, ale **paroduje neschopnost

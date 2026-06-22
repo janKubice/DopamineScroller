@@ -5,7 +5,7 @@
  * běžící reakce) se po načtení resetuje do bufferingu. RNG stav je součástí save kvůli
  * reprodukovatelnosti.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveState {
   version: number;
@@ -18,4 +18,12 @@ export interface SaveState {
   // přidáno ve Fázi 5 (volitelné kvůli zpětné kompatibilitě se staršími save)
   activePlatform?: string;
   totalDopamine?: { m: number; e: number };
+  // přidáno ve Fázi 6 – Prestige (volitelné kvůli zpětné kompatibilitě se save v1)
+  clarityUpgrades?: Record<string, number>; // trvalé Zen upgrady (přežijí prestige)
+  lifetime?: {
+    prestiges: number;
+    clarityEarned: { m: number; e: number };
+    dopamineAllTime: { m: number; e: number };
+  };
+  run?: { swipes: number; likes: number; comments: number; gems: number; jackpots: number; seconds: number };
 }

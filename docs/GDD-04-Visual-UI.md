@@ -114,6 +114,13 @@ Než přijde plné UI (Fáze 8), dev harness už ukazuje principy:
   ukáže `🎰 JACKPOT ×N` notifikaci + konfety + zvuk (event `Jackpot`). Plná slot-machine animace = Fáze 8.
 - **Produkční multiplikátor + měkký strop (#5)** — HUD ukáže `⚙️ ×<mult>`; nad prahem `🧱` (klesající
   výnos, viz `GDD-03 §3.2` rebalance) ať „se hra od jisté fáze nezlomí".
+- **Prestige / Zen (Fáze 6)** — tlačítko 🧘 v topbaru otevře **Zen panel**: stav Clarity + „💊 OVERDOSE
+  — collapse for +N 🧘" (aktivní při `canPrestige`) + obchod trvalých **Clarity upgradů** (`buyClarity`/
+  `clarityView`). Po prestige se ukáže **Doomscroll Wrapped** modal (statistiky běhu). HUD má 🧘 Clarity
+  + 💊 OVERDOSE / 🧘 +N pobídku. Po `Prestiged` se resetují telefonní karty a aktivní minihry.
+- **Minihry Skip-Ad & CAPTCHA (M4)** — `AdSpawned` ukáže banner „📺 Sponsored — Buy More Dopamine™"
+  s tlačítkem **Skip ▶▶ +N 🧠** (`skipAd`). `CaptchaSpawned` ukáže mřížku 3×3 „Select all 🚦"
+  (`solveCaptcha` – přesný výběr správných dlaždic = odměna). Odemykají se vydělaným Dopaminem.
 - **Zvuky** — syntetizované přes Web Audio (`SoundManager`): like, comment, dobrý/špatný komentář,
   pop bubliny, swipe, upgrade, hidden gem, cvakání naskakujících reakcí. Mute v horním pruhu.
 - Vše čistě jako reakce na doménové eventy / Commands — žádná herní logika v UI.

@@ -221,21 +221,32 @@ Kupováno za 🧟 **Brain Rot** (generuje TokTik+). Velký boost, ale **poškozu
 
 ## 5. Prestige Obchod (Clarity Upgrades) — „Zenový obchod"
 
-Po Overdose hra spadne; hráč začíná od nuly s **Clarity**. Utratí ji před novým během:
+### 5.1 Implementováno (Fáze 6)
+**Prestige** („Dopamine Overdose"): `Game.prestige()` vymění běh za 🧘 **Clarity** a vše resetuje.
+Zisk: `clarityOnPrestige()` = `floor((totalDopamineEarned / 1e6)^0.5)` (sqrt škálování, klesající výnos;
+`canPrestige` = ≥ 1 Clarity). `isOverdosing` = Dopamin/s ≥ ~1e9 (UI flavor + pobídka). Reset vynuluje
+běhové měny (DOP/LIK/COM/SHR/BR), upgrady, telefony (→1), platformy, streak, virality, totalDopamine;
+**Clarity + Zen upgrady přežijí** (samostatný `clarity` store). Emituje `Prestiged` s Wrapped.
 
-| Upgrade | Efekt |
-|---|---|
-| Digitální Mnich | Trvalý +10 % ke všem ziskům Dopaminu / úroveň |
-| Vyčištěná cache | Base Buffering trvale −15 % (rychlejší) |
-| Třetí Oko (vnímavost) | Trvale ↑ RNG šance na Hidden Gems |
-| Bezztrátová komprese | Telefony i boti trvale −10 % Bandwidth |
+Clarity (Zen) upgrady (`content/clarity.ts`, **trvalé**, čteny stejnými gettery přes 2. store, **bez
+měkkého stropu**):
 
-### 5.1 (C5) „Doomscroll Wrapped"
-Na Overdose/Clarity obrazovce parodie Spotify Wrapped:
-> *„Naskrolloval jsi 47 km. Lajkoval jsi 12 400×. Strávil jsi 0 minut venku.
-> Tvůj nejčastější pocit: prázdnota."*
+| id | Název | Cena (CLA) | Efekt |
+|---|---|---|---|
+| `digital_monk` | 🧘 Digital Monk | 1 ·1.6 | trvale +10 % Dopamin/lvl |
+| `cleared_cache` | 🧹 Cleared Cache | 1 ·1.6 | trvale +12 % buffering/lvl |
+| `inner_eye` | 👁️‍🗨️ Inner Eye | 2 ·1.7 | trvale +0.5 virality/lvl |
+| `lossless_mind` | 🗜️ Lossless Compression | 2 ·1.7 | trvale ×1.2 bandwidth/lvl |
+| `astral_projection` | ☯️ Astral Projection | 3 ·1.8 | trvale +10 % offline/lvl (max 5) |
+| `flow_state` | 🌊 Flow State | 4 ·1.8 | trvale +0.5 strop streaku/lvl (max 8) |
 
-Spojuje prestige s nejtvrdší satirou a dává resetu emocionální tečku.
+Save **v2**: `clarityUpgrades`, `lifetime` (prestiges/clarityEarned/dopamineAllTime), `run` (statistiky).
+Stará v1 save se načte s defaulty.
+
+### 5.2 (C5) „Doomscroll Wrapped" — implementováno
+Na prestige se ukáže shrnutí běhu (`WrappedSummary`): vydělaný Dopamin, swipy, lajky, komentáře,
+Hidden Gems, jackpoty, čas, zisk Clarity + hláška *„Your most frequent feeling: emptiness."*
+Parodie Spotify Wrapped — emocionální tečka resetu.
 
 ## 6. (C4) Narativní vrstva
 

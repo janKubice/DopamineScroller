@@ -8,6 +8,7 @@ import { BigNumber } from '../math/BigNumber';
 import { Rng } from '../math/Rng';
 import { GameClock, type Tickable } from '../time/GameClock';
 import { UPGRADES, categoryOf, effectTotalLabel, type UpgradeDef, type UpgradeCategory } from '../content/upgrades';
+import { CLARITY_UPGRADES } from '../content/clarity';
 import { PLATFORMS, DEFAULT_PLATFORM_ID, type PlatformDef } from '../content/platforms';
 import {
   Phone,
@@ -48,6 +49,28 @@ export interface GameEvents extends EventMap {
   BubbleSpawned: { id: number; value: BigNumber };
   BubblePopped: { id: number; value: BigNumber };
   BubbleExpired: { id: number };
+  /** Minihra Skip-Ad: vyskočila „reklama" k přeskočení. */
+  AdSpawned: { id: number; reward: BigNumber };
+  AdSkipped: { id: number; reward: BigNumber };
+  AdExpired: { id: number };
+  /** Minihra CAPTCHA: „prove you're human" mřížka (cells[i]=true je správná dlaždice). */
+  CaptchaSpawned: { id: number; cells: boolean[]; reward: BigNumber };
+  CaptchaResolved: { id: number; success: boolean; reward: BigNumber };
+  /** Prestige: Dopamine Overdose → reset za Clarity (s „Doomscroll Wrapped" shrnutím). */
+  Prestiged: { summary: WrappedSummary };
+}
+
+/** „Doomscroll Wrapped" – shrnutí běhu při prestige (satira Spotify Wrapped). */
+export interface WrappedSummary {
+  prestige: number; // pořadí tohoto prestige (1 = první)
+  clarityGained: BigNumber;
+  totalDopamine: BigNumber;
+  swipes: number;
+  likes: number;
+  comments: number;
+  gems: number;
+  jackpots: number;
+  seconds: number;
 }
 
 /** Výsledek offline těžby (po načtení hry). */
@@ -132,11 +155,36 @@ const CRIT_CHANCE_CAP = 0.9; // strop šance na jackpot (ať to nikdy není 100 
 const OFFLINE_EFFICIENCY_CAP = 1; // offline efektivita nemůže přesáhnout 100 %
 const UNLOCK_TEASER_FRACTION = 0.5; // zamčený (jen práh Dopaminu) se v UI ukáže, když je práh z poloviny dosažen
 
+// ── Prestige / Dopamine Overdose (Fáze 6) ──
+const CLARITY_THRESHOLD = 1e6; // kolik vydělaného Dopaminu = 1 Clarity (práh prestige)
+const CLARITY_EXP = 0.5; // sqrt škálování: ×100 Dopaminu ≈ ×10 Clarity (klesající výnos)
+const OVERDOSE_DPS_LOG10 = 9; // nad ~1e9 Dopaminu/s je „Overdose" (UI flavor + pobídka k prestige)
+
+// ── Minihry Skip-Ad & CAPTCHA (M4) ──
+const AD_UNLOCK_DOPAMINE = 500; // od kolika vydělaného Dopaminu se objevují reklamy
+const AD_MIN_INTERVAL = 14; // s mezi reklamami (min)
+const AD_MAX_INTERVAL = 26; // s (max)
+const AD_LIFETIME = 6; // s než reklama zmizí
+const AD_REWARD_FACTOR = 6; // odměna ≈ 6 swipů
+const CAPTCHA_UNLOCK_DOPAMINE = 5000; // od kolika vydělaného Dopaminu se objevují CAPTCHA
+const CAPTCHA_MIN_INTERVAL = 22; // s mezi CAPTCHA (min)
+const CAPTCHA_MAX_INTERVAL = 40; // s (max)
+const CAPTCHA_LIFETIME = 9; // s na vyřešení
+const CAPTCHA_CELLS = 9; // 3×3 mřížka
+const CAPTCHA_TILE_CHANCE = 0.4; // šance, že dlaždice je „správná"
+const CAPTCHA_REWARD_FACTOR = 25; // odměna ≈ 25 swipů (těžší minihra = větší odměna)
+
 // ── Rebalance (#5): měkký strop globálního multiplikátoru produkce ──
 // Pod prahem se nic nemění (zachová early/mid balanc), nad ním se exponenciální exploze
 // stlačí v log prostoru (klesající výnos), ať se hra „od jisté fáze nezlomí".
 const PRODUCTION_SOFTCAP_LOG10 = 6; // práh ×1e6 produkce
 const PRODUCTION_COMPRESSION = 0.5; // nad prahem se každý řád počítá jen z poloviny
+
+/** Zaokrouhlí BigNumber dolů (pro celočíselnou Clarity); obří hodnoty nechá být. */
+function bigFloor(b: BigNumber): BigNumber {
+  if (!b.isPositive() || b.e >= 12) return b;
+  return BigNumber.of(Math.floor(b.toNumber()));
+}
 
 /** Měkký strop v log10 prostoru: hodnoty ≤ 10^capLog projdou beze změny, vyšší se stlačí. */
 function softCapLog10(value: BigNumber, capLog: number, compression: number): BigNumber {
@@ -202,6 +250,38 @@ interface ActiveBubble {
   remaining: number;
 }
 
+/** Aktivní „reklama" (minihra Skip-Ad). */
+interface ActiveAd {
+  id: number;
+  reward: BigNumber;
+  remaining: number;
+}
+
+/** Aktivní CAPTCHA výzva (minihra). `cells[i]=true` = správná dlaždice k označení. */
+interface ActiveCaptcha {
+  id: number;
+  cells: boolean[];
+  reward: BigNumber;
+  remaining: number;
+}
+
+/** Statistiky běhu pro „Doomscroll Wrapped" (resetují se při prestige). */
+interface RunStats {
+  swipes: number;
+  likes: number;
+  comments: number;
+  gems: number;
+  jackpots: number;
+  seconds: number;
+}
+
+/** Doživotní statistiky (přežijí prestige). */
+interface LifetimeStats {
+  prestiges: number;
+  clarityEarned: BigNumber;
+  dopamineAllTime: BigNumber;
+}
+
 /** Na co má auto-scroller čekat, než post swipne (M1/T4). */
 export type SwipeWaitMode = 'none' | 'like' | 'comment' | 'both';
 
@@ -209,6 +289,7 @@ export interface GameOptions {
   seed?: number;
   comments?: CommentPool;
   upgrades?: readonly UpgradeDef[];
+  clarityUpgrades?: readonly UpgradeDef[];
   platforms?: readonly PlatformDef[];
   phoneConfig?: PhoneConfig;
 }
@@ -222,6 +303,8 @@ export class Game implements Tickable {
   readonly bus = new EventBus<GameEvents>();
   readonly wallet = new Wallet();
   readonly upgrades: UpgradeStore;
+  /** Clarity „Zen" upgrady (prestige meta) – samostatný store, přežívá reset. */
+  readonly clarity: UpgradeStore;
   readonly rng: Rng;
   readonly clock: GameClock;
   readonly phones: Phone[] = [];
@@ -233,6 +316,18 @@ export class Game implements Tickable {
   private bubbleTimer = 0;
   private nextBubbleIn = BUBBLE_MIN_INTERVAL;
   private nextBubbleId = 1;
+  // Minihry Skip-Ad & CAPTCHA (jedna aktivní naráz)
+  private ad: ActiveAd | null = null;
+  private adTimer = 0;
+  private nextAdIn = AD_MIN_INTERVAL;
+  private nextAdId = 1;
+  private captcha: ActiveCaptcha | null = null;
+  private captchaTimer = 0;
+  private nextCaptchaIn = CAPTCHA_MIN_INTERVAL;
+  private nextCaptchaId = 1;
+  // Statistiky (Doomscroll Wrapped + lifetime)
+  private runStats: RunStats = { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
+  private lifetime: LifetimeStats = { prestiges: 0, clarityEarned: BigNumber.ZERO, dopamineAllTime: BigNumber.ZERO };
   private autoLikeBudget = 0;
   private autoSwipeBudget = 0;
   private autoCommentBudget = 0;
@@ -252,6 +347,7 @@ export class Game implements Tickable {
     this.rng = new Rng(options.seed ?? 1);
     this.comments = options.comments ?? CommentPool.default();
     this.upgrades = new UpgradeStore(options.upgrades ?? UPGRADES);
+    this.clarity = new UpgradeStore(options.clarityUpgrades ?? CLARITY_UPGRADES);
     this.platforms = options.platforms ?? PLATFORMS;
     this.activePlatformId = this.platforms[0]?.id ?? DEFAULT_PLATFORM_ID;
     this.refreshUnlockedPlatforms();
@@ -348,7 +444,8 @@ export class Game implements Tickable {
       this.viralityBase +
       this.sumEffect('virality') +
       this.activePlatform.viralityBonus +
-      this.synergyShareVirality
+      this.synergyShareVirality +
+      this.clarityVirality
     );
   }
 
@@ -375,6 +472,26 @@ export class Game implements Tickable {
     return OMNIPRESENCE_PER_PLATFORM * Math.max(0, this.unlockedPlatformIds.size - 1);
   }
 
+  // ── Clarity (prestige meta): trvalé bonusy ze samostatného `clarity` store ──
+  get clarityProductionMult(): BigNumber {
+    return this.effectProduct('dopamineMultiplier', this.clarity);
+  }
+  get clarityBufferMult(): number {
+    return this.effectProduct('bufferSpeedMult', this.clarity).toNumber();
+  }
+  get clarityBandwidthMult(): number {
+    return this.effectProduct('bandwidthMult', this.clarity).toNumber();
+  }
+  get clarityVirality(): number {
+    return this.sumEffect('virality', this.clarity);
+  }
+  get clarityOfflineBonus(): number {
+    return this.sumEffect('offlineEfficiencyBonus', this.clarity);
+  }
+  get clarityStreakBonus(): number {
+    return this.sumEffect('streakCapBonus', this.clarity);
+  }
+
   /** Surový součin dopamineMultiplier (před měkkým stropem) – pro UI/diagnostiku. */
   get rawProductionMultiplier(): BigNumber {
     return this.effectProduct('dopamineMultiplier');
@@ -385,7 +502,10 @@ export class Game implements Tickable {
    * nad prahem PRODUCTION_SOFTCAP zploštěný (rebalance #5 – brzdí exponenciální explozi).
    */
   get productionMultiplier(): BigNumber {
-    return softCapLog10(this.rawProductionMultiplier, PRODUCTION_SOFTCAP_LOG10, PRODUCTION_COMPRESSION);
+    // Běh se měkce stropuje (rebalance #5); Clarity (meta) se násobí navrch BEZ stropu.
+    return softCapLog10(this.rawProductionMultiplier, PRODUCTION_SOFTCAP_LOG10, PRODUCTION_COMPRESSION).mul(
+      this.clarityProductionMult,
+    );
   }
 
   /** Je globální produkce nad měkkým stropem (UI může naznačit klesající výnos)? */
@@ -413,7 +533,7 @@ export class Game implements Tickable {
   // ── Vlna 2: nové efekty (čtené dynamicky) ──
   /** Aktuální strop streaku (M3) – base + upgrady (Doomscroll Stamina). */
   get streakMax(): number {
-    return STREAK_MAX + this.sumEffect('streakCapBonus');
+    return STREAK_MAX + this.sumEffect('streakCapBonus') + this.clarityStreakBonus;
   }
   /** Šance, že je swipe jackpot (crit), 0–1, zastropovaná. 0 = bez upgradů. */
   get critChance(): number {
@@ -430,7 +550,10 @@ export class Game implements Tickable {
   }
   /** Efektivita offline těžby (0–1): base + upgrady (Time-Dilation), zastropováno. */
   get offlineEfficiency(): number {
-    return Math.min(OFFLINE_EFFICIENCY_CAP, OFFLINE_EFFICIENCY + this.sumEffect('offlineEfficiencyBonus'));
+    return Math.min(
+      OFFLINE_EFFICIENCY_CAP,
+      OFFLINE_EFFICIENCY + this.sumEffect('offlineEfficiencyBonus') + this.clarityOfflineBonus,
+    );
   }
   /** Strop offline těžby v sekundách: base + upgrady (Cloud Backup). */
   get maxOfflineSeconds(): number {
@@ -452,10 +575,10 @@ export class Game implements Tickable {
   }
 
   /** Součin value^level daného multiplikativního efektu (kontroluje effect i sideEffect). */
-  private effectProduct(type: UpgradeDef['effect']['type']): BigNumber {
+  private effectProduct(type: UpgradeDef['effect']['type'], store: UpgradeStore = this.upgrades): BigNumber {
     let mult = BigNumber.ONE;
-    for (const def of this.upgrades.all) {
-      const lvl = this.upgrades.level(def.id);
+    for (const def of store.all) {
+      const lvl = store.level(def.id);
       if (lvl <= 0) continue;
       if (def.effect.type === type) mult = mult.mul(BigNumber.of(def.effect.value).pow(lvl));
       if (def.sideEffect?.type === type) mult = mult.mul(BigNumber.of(def.sideEffect.value).pow(lvl));
@@ -471,12 +594,12 @@ export class Game implements Tickable {
         total += def.effect.value * this.upgrades.level(def.id);
       }
     }
-    return total * this.effectProduct('bandwidthMult').toNumber();
+    return total * this.effectProduct('bandwidthMult').toNumber() * this.clarityBandwidthMult;
   }
 
-  /** Násobič rychlosti bufferingu z upgradů (Vlna 2): > 1 = posty se načítají rychleji. */
+  /** Násobič rychlosti bufferingu z upgradů (Vlna 2) × Clarity (Cleared Cache). */
   get bufferSpeedMultiplier(): number {
-    return this.effectProduct('bufferSpeedMult').toNumber();
+    return this.effectProduct('bufferSpeedMult').toNumber() * this.clarityBufferMult;
   }
 
   /** Aktuální spotřeba sítě (Mbps): (telefony + boti) × consumptionMultiplier (AI Slop). */
@@ -584,8 +707,11 @@ export class Game implements Tickable {
     if (critChance > 0 && this.rng.next() < critChance) {
       const multiplier = this.critMultiplier;
       dopamine = dopamine.mul(BigNumber.of(multiplier));
+      this.runStats.jackpots++;
       this.bus.emit('Jackpot', { phoneId, dopamine, multiplier });
     }
+    this.runStats.swipes++;
+    if (result.rarity !== 'common') this.runStats.gems++;
     this.credit('DOP', dopamine);
     // Některé platformy (TokTik+) pasivně hnijou mozek.
     const br = this.activePlatform.brainRotPerSwipe;
@@ -607,6 +733,7 @@ export class Game implements Tickable {
     const gained = phone.like(this.effectiveLikeYield);
     if (!gained) return null;
     if (manual) this.spendAttention(ATTENTION_COST_LIKE);
+    this.runStats.likes++;
     this.credit('LIK', gained);
     this.bus.emit('Liked', { phoneId, likes: gained });
     return gained;
@@ -637,6 +764,7 @@ export class Game implements Tickable {
     this.pendingComments.delete(phoneId);
     phone.markCommented();
     if (manual) this.spendAttention(ATTENTION_COST_COMMENT);
+    this.runStats.comments++;
     this.credit('COM', BigNumber.ONE);
 
     this.reactions.push({
@@ -678,6 +806,48 @@ export class Game implements Tickable {
     });
     this.bus.emit('UpgradePurchased', { id, level: this.upgrades.level(id) });
     return n;
+  }
+
+  /** Koupí Clarity „Zen" upgrade (za 🧘 CLA). Trvalý – přežije prestige. Vrací koupené úrovně. */
+  buyClarity(id: string, requested = 1): number {
+    const def = this.clarity.def(id);
+    if (!def) return 0;
+    const want = Math.min(requested, this.clarity.remaining(id));
+    if (want <= 0) return 0;
+    const n = Math.min(want, this.clarity.maxAffordable(id, this.wallet.get('CLA')));
+    if (n <= 0) return 0;
+    this.wallet.spend('CLA', this.clarity.bulkCost(id, n));
+    this.clarity.incrementLevel(id, n);
+    this.bus.emit('CurrencyChanged', { id: 'CLA', total: this.wallet.get('CLA') });
+    this.bus.emit('UpgradePurchased', { id, level: this.clarity.level(id) });
+    return n;
+  }
+
+  /** View model Clarity upgradů (Zen shop). */
+  clarityView(): UpgradeView[] {
+    return this.clarity.all.map((def) => {
+      const maxed = this.clarity.isMaxed(def.id);
+      const cost = this.clarity.nextCost(def.id) ?? BigNumber.ZERO;
+      const level = this.clarity.level(def.id);
+      return {
+        id: def.id,
+        name: def.name,
+        icon: def.icon,
+        description: def.description,
+        level,
+        maxed,
+        cost,
+        costCurrency: 'CLA',
+        affordable: !maxed && this.wallet.canAfford('CLA', cost),
+        networkDelta: 0,
+        networkKind: 'none',
+        locked: false,
+        visible: true,
+        unlockHint: undefined,
+        category: 'algorithms',
+        effectTotal: effectTotalLabel(def, level),
+      };
+    });
   }
 
   /** Minihra: sebere dopaminovou bublinu (manuál → stojí Pozornost, odměna × focus). */
@@ -779,6 +949,210 @@ export class Game implements Tickable {
     }
   }
 
+  // ── Prestige / Dopamine Overdose (Fáze 6) ───────────────────────────────────
+
+  /** Kolik Clarity by dal prestige právě teď: floor((total/THRESH)^EXP), 0 pod prahem. */
+  clarityOnPrestige(): BigNumber {
+    const total = this.totalDopamine;
+    if (total.lt(BigNumber.of(CLARITY_THRESHOLD))) return BigNumber.ZERO;
+    return bigFloor(total.div(BigNumber.of(CLARITY_THRESHOLD)).pow(CLARITY_EXP));
+  }
+
+  /** Lze teď prestižovat? (alespoň 1 Clarity k zisku) */
+  get canPrestige(): boolean {
+    return this.clarityOnPrestige().gte(BigNumber.ONE);
+  }
+
+  /** „Dopamine Overdose": kriticky vysoký Dopamin/s (UI flavor + pobídka k prestige). */
+  get isOverdosing(): boolean {
+    const dps = this.estimatedDopaminePerSecond;
+    return dps.isPositive() && dps.log10() >= OVERDOSE_DPS_LOG10;
+  }
+
+  /** Doživotní statistiky (přežijí prestige). */
+  get lifetimeStats(): LifetimeStats {
+    return { ...this.lifetime };
+  }
+
+  /** Aktuální „Doomscroll Wrapped" data tohoto běhu (náhled bez resetu). */
+  wrapped(): WrappedSummary {
+    return {
+      prestige: this.lifetime.prestiges + 1,
+      clarityGained: this.clarityOnPrestige(),
+      totalDopamine: this.totalDopamine,
+      ...this.runStats,
+    };
+  }
+
+  /**
+   * Prestige: „Dopamine Overdose" → kolaps běhu výměnou za 🧘 Clarity. Vrací Doomscroll Wrapped,
+   * nebo null pokud zatím nelze (pod prahem). Clarity + Zen upgrady přežijí; vše ostatní se resetuje.
+   */
+  prestige(): WrappedSummary | null {
+    const gain = this.clarityOnPrestige();
+    if (gain.lt(BigNumber.ONE)) return null;
+    const summary = this.wrapped();
+
+    this.lifetime.prestiges += 1;
+    this.lifetime.clarityEarned = this.lifetime.clarityEarned.add(gain);
+    this.lifetime.dopamineAllTime = this.lifetime.dopamineAllTime.add(this.totalDopamine);
+
+    // Měny: vynuluj běhové, ponech a navyš Clarity.
+    for (const id of ['DOP', 'LIK', 'COM', 'SHR', 'BR'] as CurrencyId[]) this.wallet.set(id, BigNumber.ZERO);
+    this.wallet.add('CLA', gain);
+
+    // Reset běhu (Clarity store NEresetujeme – je trvalý).
+    this.upgrades.reset();
+    this.streakValue = STREAK_FLOOR;
+    this.viralityBase = 0;
+    this.totalDopamine = BigNumber.ZERO;
+    this.reactions.length = 0;
+    this.pendingComments.clear();
+    this.bubbles.length = 0;
+    this.ad = null;
+    this.captcha = null;
+    this.autoLikeBudget = 0;
+    this.autoSwipeBudget = 0;
+    this.autoCommentBudget = 0;
+    this.bubbleTimer = 0;
+    this.adTimer = 0;
+    this.captchaTimer = 0;
+    this.nextBubbleIn = this.rollBubbleInterval();
+    this.nextAdIn = this.rollInterval(AD_MIN_INTERVAL, AD_MAX_INTERVAL);
+    this.nextCaptchaIn = this.rollInterval(CAPTCHA_MIN_INTERVAL, CAPTCHA_MAX_INTERVAL);
+    this.runStats = { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
+    this.swipeWaitForMode = 'none';
+    this.attentionValue = this.maxAttention;
+
+    // Platformy zpět na první (totalDopamine = 0).
+    this.unlockedPlatformIds = new Set<string>();
+    this.refreshUnlockedPlatforms();
+    this.activePlatformId = this.platforms[0]?.id ?? DEFAULT_PLATFORM_ID;
+
+    // Telefony zpět na jeden.
+    this.phones.length = 0;
+    this.nextPhoneId = 1;
+    this.addPhone();
+
+    this.bus.emit('CurrencyChanged', { id: 'CLA', total: this.wallet.get('CLA') });
+    this.bus.emit('Prestiged', { summary });
+    return summary;
+  }
+
+  // ── Minihry: Skip-Ad & CAPTCHA (M4) ─────────────────────────────────────────
+
+  get adsUnlocked(): boolean {
+    return this.totalDopamine.gte(BigNumber.of(AD_UNLOCK_DOPAMINE));
+  }
+  get captchasUnlocked(): boolean {
+    return this.totalDopamine.gte(BigNumber.of(CAPTCHA_UNLOCK_DOPAMINE));
+  }
+  /** Aktivní reklama (pro UI / re-render po reloadu). */
+  get activeAd(): { id: number; reward: BigNumber } | null {
+    return this.ad ? { id: this.ad.id, reward: this.ad.reward } : null;
+  }
+  /** Aktivní CAPTCHA (pro UI). */
+  get activeCaptcha(): { id: number; cells: boolean[]; reward: BigNumber } | null {
+    return this.captcha ? { id: this.captcha.id, cells: [...this.captcha.cells], reward: this.captcha.reward } : null;
+  }
+
+  /** Skip-Ad: přeskočí reklamu → odměna Dopaminu. Vrací odměnu, nebo null. */
+  skipAd(id: number): BigNumber | null {
+    if (!this.ad || this.ad.id !== id) return null;
+    const reward = this.ad.reward;
+    this.ad = null;
+    this.credit('DOP', reward);
+    this.bumpStreak();
+    this.bus.emit('AdSkipped', { id, reward });
+    return reward;
+  }
+
+  /**
+   * CAPTCHA: vyřeš výzvu výběrem dlaždic. Úspěch = vybrané indexy přesně odpovídají správným.
+   * Vrací true/false (success). Při úspěchu připíše odměnu.
+   */
+  solveCaptcha(id: number, selected: readonly number[]): boolean {
+    if (!this.captcha || this.captcha.id !== id) return false;
+    const target = this.captcha.cells;
+    const sel = new Set(selected);
+    let success = sel.size === target.filter(Boolean).length;
+    if (success) {
+      for (let i = 0; i < target.length; i++) {
+        if (target[i] !== sel.has(i)) {
+          success = false;
+          break;
+        }
+      }
+    }
+    const reward = success ? this.captcha.reward : BigNumber.ZERO;
+    this.captcha = null;
+    if (success) {
+      this.credit('DOP', reward);
+      this.bumpStreak();
+    }
+    this.bus.emit('CaptchaResolved', { id, success, reward });
+    return success;
+  }
+
+  private rollInterval(min: number, max: number): number {
+    return min + this.rng.next() * (max - min);
+  }
+
+  /** Minihra Skip-Ad: spawn/expirace (jen po odemčení dle vydělaného Dopaminu). */
+  private advanceAds(dt: number): void {
+    if (this.ad) {
+      this.ad.remaining -= dt;
+      if (this.ad.remaining <= 0) {
+        const id = this.ad.id;
+        this.ad = null;
+        this.bus.emit('AdExpired', { id });
+      }
+      return;
+    }
+    if (!this.adsUnlocked) return;
+    this.adTimer += dt;
+    if (this.adTimer >= this.nextAdIn) {
+      const id = this.nextAdId++;
+      const reward = BigNumber.max(
+        BigNumber.of(2),
+        this.basePostValue.mul(this.globalSwipeMultiplier).mul(BigNumber.of(AD_REWARD_FACTOR)),
+      );
+      this.ad = { id, reward, remaining: AD_LIFETIME };
+      this.adTimer = 0;
+      this.nextAdIn = this.rollInterval(AD_MIN_INTERVAL, AD_MAX_INTERVAL);
+      this.bus.emit('AdSpawned', { id, reward });
+    }
+  }
+
+  /** Minihra CAPTCHA: spawn/expirace (jen po odemčení dle vydělaného Dopaminu). */
+  private advanceCaptchas(dt: number): void {
+    if (this.captcha) {
+      this.captcha.remaining -= dt;
+      if (this.captcha.remaining <= 0) {
+        const id = this.captcha.id;
+        this.captcha = null;
+        this.bus.emit('CaptchaResolved', { id, success: false, reward: BigNumber.ZERO });
+      }
+      return;
+    }
+    if (!this.captchasUnlocked) return;
+    this.captchaTimer += dt;
+    if (this.captchaTimer >= this.nextCaptchaIn) {
+      const cells: boolean[] = [];
+      for (let i = 0; i < CAPTCHA_CELLS; i++) cells.push(this.rng.next() < CAPTCHA_TILE_CHANCE);
+      if (!cells.some(Boolean)) cells[Math.floor(this.rng.next() * CAPTCHA_CELLS)] = true; // aspoň jedna
+      const id = this.nextCaptchaId++;
+      const reward = BigNumber.max(
+        BigNumber.of(5),
+        this.basePostValue.mul(this.globalSwipeMultiplier).mul(BigNumber.of(CAPTCHA_REWARD_FACTOR)),
+      );
+      this.captcha = { id, cells, reward, remaining: CAPTCHA_LIFETIME };
+      this.captchaTimer = 0;
+      this.nextCaptchaIn = this.rollInterval(CAPTCHA_MIN_INTERVAL, CAPTCHA_MAX_INTERVAL);
+      this.bus.emit('CaptchaSpawned', { id, cells: [...cells], reward });
+    }
+  }
+
   // ── Persistence & offline ───────────────────────────────────────────────────
 
   serialize(): SaveState {
@@ -792,6 +1166,13 @@ export class Game implements Tickable {
       phoneCount: this.phones.length,
       activePlatform: this.activePlatformId,
       totalDopamine: this.totalDopamine.serialize(),
+      clarityUpgrades: this.clarity.serialize(),
+      lifetime: {
+        prestiges: this.lifetime.prestiges,
+        clarityEarned: this.lifetime.clarityEarned.serialize(),
+        dopamineAllTime: this.lifetime.dopamineAllTime.serialize(),
+      },
+      run: { ...this.runStats },
     };
   }
 
@@ -800,6 +1181,8 @@ export class Game implements Tickable {
     this.rng.restore(data.rng);
     this.wallet.load(data.wallet);
     this.upgrades.loadLevels(data.upgrades);
+    this.clarity.reset();
+    if (data.clarityUpgrades) this.clarity.loadLevels(data.clarityUpgrades);
     this.streakValue = data.streak;
     this.viralityBase = data.virality;
     this.reactions.length = 0;
@@ -807,9 +1190,26 @@ export class Game implements Tickable {
     this.bubbles.length = 0;
     this.bubbleTimer = 0;
     this.nextBubbleIn = this.rollBubbleInterval();
+    this.ad = null;
+    this.captcha = null;
+    this.adTimer = 0;
+    this.captchaTimer = 0;
+    this.nextAdIn = this.rollInterval(AD_MIN_INTERVAL, AD_MAX_INTERVAL);
+    this.nextCaptchaIn = this.rollInterval(CAPTCHA_MIN_INTERVAL, CAPTCHA_MAX_INTERVAL);
     this.autoLikeBudget = 0;
     this.autoSwipeBudget = 0;
     this.autoCommentBudget = 0;
+    // Lifetime + run statistiky (volitelné – staré save je nemají).
+    this.lifetime = data.lifetime
+      ? {
+          prestiges: data.lifetime.prestiges,
+          clarityEarned: BigNumber.deserialize(data.lifetime.clarityEarned),
+          dopamineAllTime: BigNumber.deserialize(data.lifetime.dopamineAllTime),
+        }
+      : { prestiges: 0, clarityEarned: BigNumber.ZERO, dopamineAllTime: BigNumber.ZERO };
+    this.runStats = data.run
+      ? { ...data.run }
+      : { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
     this.attentionValue = MAX_ATTENTION;
     // Platformy: obnov kumulovaný Dopamin, dopočítej odemčené, ověř aktivní.
     this.totalDopamine = data.totalDopamine ? BigNumber.deserialize(data.totalDopamine) : BigNumber.ZERO;
@@ -880,7 +1280,10 @@ export class Game implements Tickable {
     this.processBots(dt);
     this.advanceReactions(dt);
     this.advanceBubbles(dt);
+    this.advanceAds(dt);
+    this.advanceCaptchas(dt);
     this.checkPlatformUnlocks();
+    this.runStats.seconds += dt;
   }
 
   /** Odemkne platformy, jejichž práh kumulovaného Dopaminu byl právě překročen. */
@@ -1072,10 +1475,10 @@ export class Game implements Tickable {
   }
 
   /** Součet hodnot daného aditivního efektu (effect i sideEffect) × level. */
-  private sumEffect(type: UpgradeDef['effect']['type']): number {
+  private sumEffect(type: UpgradeDef['effect']['type'], store: UpgradeStore = this.upgrades): number {
     let sum = 0;
-    for (const def of this.upgrades.all) {
-      const lvl = this.upgrades.level(def.id);
+    for (const def of store.all) {
+      const lvl = store.level(def.id);
       if (lvl <= 0) continue;
       if (def.effect.type === type) sum += def.effect.value * lvl;
       if (def.sideEffect?.type === type) sum += def.sideEffect.value * lvl;

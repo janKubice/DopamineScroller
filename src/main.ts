@@ -44,6 +44,7 @@ app.innerHTML = `
         🔊
         <input type="range" id="volume" min="0" max="1" step="0.05" />
       </label>
+      <button class="icon-btn" id="zenBtn" title="Zen / Prestige">🧘</button>
       <button class="icon-btn topbar__settings" id="mute" title="Mute" aria-label="Mute">🔊</button>
     </div>
   </header>
@@ -154,8 +155,19 @@ function renderHud(): void {
       `title="Global production multiplier${capped ? ' — soft-capped (diminishing returns)' : ''}">` +
       `⚙️ ×${prod.format()}${capped ? ' 🧱' : ''}</span>`
     : '';
+  // Fáze 6: Clarity (jen když nějaká je) + Overdose/Prestige pobídka.
+  const cla = game.wallet.get('CLA');
+  const claItem = cla.isPositive()
+    ? `<span class="hud__item hud__clarity" title="Clarity — prestige meta currency">🧘 ${cla.format()}</span>`
+    : '';
+  const odItem = game.isOverdosing
+    ? `<span class="hud__item hud__overdose" title="Dopamine Overdose — prestige for Clarity">💊 OVERDOSE</span>`
+    : game.canPrestige
+      ? `<span class="hud__item hud__prestige" title="Prestige available">🧘 +${game.clarityOnPrestige().format()}</span>`
+      : '';
   hud.innerHTML =
     money +
+    claItem +
     rate +
     prodItem +
     synergyItem +
@@ -163,7 +175,8 @@ function renderHud(): void {
     `<span class="hud__item ${overload ? 'hud__overload' : ''}">` +
     `📶 ${game.bandwidthConsumption}/${game.totalBandwidth}${overload ? ' ⚠️' : ''}</span>` +
     focusItem +
-    `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>`;
+    `<span class="hud__item hud__streak">🔥 ×${game.streak.toFixed(2)}</span>` +
+    odItem;
 }
 
 // ── Phone farm (one card per phone) ──
@@ -636,6 +649,209 @@ game.bus.on('PlatformUnlocked', (e) => {
 game.bus.on('PlatformChanged', (e) => {
   const p = game.platformView().find((x) => x.id === e.id);
   pushNote(`📲 Switched to ${p?.name ?? e.id}`, 'note--like', 1800);
+});
+
+// ── Fáze 6: Zen / Prestige panel ──
+const zenModal = document.createElement('div');
+zenModal.className = 'modal';
+zenModal.hidden = true;
+zenModal.innerHTML = `
+  <div class="modal__backdrop" data-zclose></div>
+  <div class="modal__box zen">
+    <header class="modal__head"><span>🧘 Zen — Prestige</span><button class="icon-btn" data-zclose>✕</button></header>
+    <div class="zen__summary" id="zenSummary"></div>
+    <button class="big-btn" id="zenPrestige"></button>
+    <h3 class="zen__title">Permanent Clarity upgrades</h3>
+    <div class="zen__shop" id="zenShop"></div>
+  </div>`;
+document.body.appendChild(zenModal);
+const zenSummary = zenModal.querySelector<HTMLElement>('#zenSummary')!;
+const zenShop = zenModal.querySelector<HTMLElement>('#zenShop')!;
+const zenPrestigeBtn = zenModal.querySelector<HTMLButtonElement>('#zenPrestige')!;
+
+function openZen(open: boolean): void {
+  zenModal.hidden = !open;
+  if (open) renderZen();
+}
+byId('zenBtn').addEventListener('click', () => openZen(true));
+for (const el of Array.from(zenModal.querySelectorAll('[data-zclose]'))) {
+  el.addEventListener('click', () => openZen(false));
+}
+zenPrestigeBtn.addEventListener('click', () => {
+  const s = game.prestige();
+  if (s) {
+    openZen(false);
+    showWrapped(s);
+  }
+});
+
+function renderZen(): void {
+  const cla = game.wallet.get('CLA');
+  const gain = game.clarityOnPrestige();
+  const lt = game.lifetimeStats;
+  zenSummary.innerHTML =
+    `<div class="zen__cla">🧘 Clarity: <b>${cla.format()}</b></div>` +
+    `<div class="zen__muted">Resets: ${lt.prestiges} · lifetime 🧠 ${lt.dopamineAllTime.format()}</div>`;
+  const can = game.canPrestige;
+  zenPrestigeBtn.disabled = !can;
+  zenPrestigeBtn.className = `big-btn ${can ? 'big-btn--danger' : ''}`;
+  zenPrestigeBtn.textContent = can
+    ? `💊 OVERDOSE — collapse for +${gain.format()} 🧘 Clarity`
+    : 'Earn ~1M 🧠 this run to unlock prestige';
+  zenShop.innerHTML = game
+    .clarityView()
+    .map(
+      (u) => `
+      <button class="upg" data-cla="${u.id}" ${u.affordable ? '' : 'disabled'}>
+        <span class="upg__icon">${u.icon}</span>
+        <span class="upg__body">
+          <span class="upg__head"><span class="upg__name">${escapeHtml(u.name)}</span>
+            <span class="upg__lvl">${u.maxed ? 'MAX' : u.level > 0 ? 'Lv ' + u.level : ''}</span></span>
+          <span class="upg__desc">${escapeHtml(u.description)}</span>
+          <span class="upg__meta"><span class="upg__total">${u.effectTotal ? 'now ' + u.effectTotal : ''}</span>
+            <span class="upg__cost">${u.maxed ? '' : '🧘 ' + u.cost.format()}</span></span>
+        </span>
+      </button>`,
+    )
+    .join('');
+  for (const btn of Array.from(zenShop.querySelectorAll<HTMLButtonElement>('button[data-cla]'))) {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset['cla'];
+      if (id && game.buyClarity(id, 1)) {
+        sound.upgrade();
+        renderZen();
+      }
+    });
+  }
+}
+
+// ── Doomscroll Wrapped (C5) — shrnutí běhu na prestige ──
+const wrappedModal = document.createElement('div');
+wrappedModal.className = 'modal';
+wrappedModal.hidden = true;
+document.body.appendChild(wrappedModal);
+
+interface Wrapped {
+  prestige: number;
+  clarityGained: { format(): string };
+  totalDopamine: { format(): string };
+  swipes: number;
+  likes: number;
+  comments: number;
+  gems: number;
+  jackpots: number;
+  seconds: number;
+}
+function showWrapped(s: Wrapped): void {
+  const n = (x: number): string => x.toLocaleString('en-US');
+  const mins = Math.floor(s.seconds / 60);
+  wrappedModal.innerHTML = `
+    <div class="modal__backdrop" data-wclose></div>
+    <div class="modal__box wrapped">
+      <header class="modal__head"><span>🎁 Doomscroll Wrapped #${s.prestige}</span><button class="icon-btn" data-wclose>✕</button></header>
+      <p class="wrapped__lead">You scrolled yourself into oblivion. Your run in review:</p>
+      <ul class="wrapped__stats">
+        <li>🧠 Dopamine harvested: <b>${s.totalDopamine.format()}</b></li>
+        <li>⬆️ Swipes: <b>${n(s.swipes)}</b></li>
+        <li>👍 Likes: <b>${n(s.likes)}</b> · 💬 Comments: <b>${n(s.comments)}</b></li>
+        <li>💎 Hidden Gems: <b>${n(s.gems)}</b> · 🎰 Jackpots: <b>${n(s.jackpots)}</b></li>
+        <li>⏱️ Time doomscrolled: <b>${mins} min</b></li>
+        <li>🧘 Clarity gained: <b>${s.clarityGained.format()}</b></li>
+      </ul>
+      <p class="wrapped__foot">Your most frequent feeling: <i>emptiness</i>.</p>
+      <button class="big-btn" data-wclose>Begin again, wiser 🧘</button>
+    </div>`;
+  wrappedModal.hidden = false;
+  for (const el of Array.from(wrappedModal.querySelectorAll('[data-wclose]'))) {
+    el.addEventListener('click', () => (wrappedModal.hidden = true));
+  }
+}
+
+game.bus.on('Prestiged', (e) => {
+  sound.goodComment();
+  // Reset prezentace: telefonní karty a aktivní minihry.
+  for (const card of cards.values()) card.root.remove();
+  cards.clear();
+  hideAd();
+  captchaModal.hidden = true;
+  showWrapped(e.summary as unknown as Wrapped);
+});
+
+// ── Minihra Skip-Ad: banner s tlačítkem Skip ──
+const adBanner = document.createElement('div');
+adBanner.className = 'ad-banner';
+adBanner.hidden = true;
+document.body.appendChild(adBanner);
+
+function showAd(id: number, reward: { format(): string }): void {
+  adBanner.innerHTML =
+    `<span class="ad-banner__label">📺 Sponsored — Buy More Dopamine™</span>` +
+    `<button class="ad-banner__skip" id="adSkip">Skip ▶▶ +${reward.format()} 🧠</button>`;
+  adBanner.hidden = false;
+  adBanner.querySelector<HTMLButtonElement>('#adSkip')!.addEventListener('click', () => {
+    const r = game.skipAd(id);
+    if (r) pushNote(`⏭️ Ad skipped +${r.format()} 🧠`, 'note--like', 1400);
+  });
+}
+function hideAd(): void {
+  adBanner.hidden = true;
+}
+game.bus.on('AdSpawned', (e) => {
+  sound.comment();
+  showAd(e.id, e.reward);
+});
+game.bus.on('AdSkipped', hideAd);
+game.bus.on('AdExpired', hideAd);
+
+// ── Minihra CAPTCHA: „prove you're human" mřížka ──
+const captchaModal = document.createElement('div');
+captchaModal.className = 'modal';
+captchaModal.hidden = true;
+document.body.appendChild(captchaModal);
+let captchaSelected = new Set<number>();
+
+function showCaptcha(id: number, cells: boolean[]): void {
+  captchaSelected = new Set();
+  const grid = cells
+    .map((c, i) => `<button class="cap__cell" data-i="${i}">${c ? '🚦' : '🌫️'}</button>`)
+    .join('');
+  captchaModal.innerHTML = `
+    <div class="modal__backdrop"></div>
+    <div class="modal__box captcha">
+      <header class="modal__head"><span>🤖 Verify you're human</span></header>
+      <p class="captcha__lead">Select all squares with <b>🚦 traffic lights</b></p>
+      <div class="cap__grid">${grid}</div>
+      <button class="big-btn" id="capVerify">Verify</button>
+    </div>`;
+  captchaModal.hidden = false;
+  for (const cell of Array.from(captchaModal.querySelectorAll<HTMLButtonElement>('.cap__cell'))) {
+    cell.addEventListener('click', () => {
+      const i = Number(cell.dataset['i']);
+      if (captchaSelected.has(i)) {
+        captchaSelected.delete(i);
+        cell.classList.remove('is-sel');
+      } else {
+        captchaSelected.add(i);
+        cell.classList.add('is-sel');
+      }
+    });
+  }
+  captchaModal.querySelector<HTMLButtonElement>('#capVerify')!.addEventListener('click', () => {
+    game.solveCaptcha(id, [...captchaSelected]);
+  });
+}
+game.bus.on('CaptchaSpawned', (e) => {
+  sound.bubble();
+  showCaptcha(e.id, e.cells);
+});
+game.bus.on('CaptchaResolved', (e) => {
+  captchaModal.hidden = true;
+  if (e.success) {
+    sound.gem();
+    pushNote(`✅ Verified! +${e.reward.format()} 🧠`, 'note--like', 1600);
+  } else {
+    pushNote('❌ CAPTCHA failed', 'note--dislike', 1400);
+  }
 });
 
 // ── Boot ──

@@ -3,9 +3,9 @@
 Předávací dokument pro pokračování projektu (nová session / jiný vývojář).
 Cíl: po přečtení tohohle + `docs/` umíš plynule pokračovat bez ztráty kontextu.
 
-**Stav:** **Vlna 2 + polish hotové** (T6 odemykání, nové efekty, panel #9, varianty zařízení #8,
-rebalance #5; + bohaté karty #B, floating numbers, kosmetické skiny, discoverability telefonů) ·
-větev `claude/serene-goodall-af920r` · **165 testů zelených**. Další: Fáze 6 (Prestige).
+**Stav:** **Fáze 6 (Prestige) HOTOVÁ** — Dopamine Overdose → Clarity, Zen shop, Doomscroll Wrapped,
+minihry Skip-Ad + CAPTCHA. (Před tím: Vlna 2 + polish.) · větev `claude/serene-goodall-af920r` ·
+**179 testů zelených**. Další: Fáze 8 (plné UI/WebGL) nebo Fáze 9 (balanc do JSON, achievementy).
 
 ---
 
@@ -64,11 +64,12 @@ src/core/
   economy/     Wallet.ts, currencies.ts (DOP/LIK/COM/SHR/BR/CLA),
                CostCurve.ts (exp. ceny), UpgradeStore.ts (úrovně+ceny),
                Bandwidth.ts (load/bufferScale)
-  domain/      Phone.ts (FSM buffering/ready/swiping), Game.ts (★ orchestrátor, ~900 řádků)
+  domain/      Phone.ts (FSM buffering/ready/swiping), Game.ts (★ orchestrátor, ~1300 řádků:
+               + prestige/Clarity, minihry Skip-Ad/CAPTCHA, run/lifetime statistiky)
   content/     upgrades.ts (51 upgradů: Vlna 2 + Cosmetics + UpgradeDef.unlock/category + effectTotalLabel),
-               platforms.ts (5 platforem),
+               clarity.ts (6 Zen/Clarity meta-upgradů – prestige), platforms.ts (5 platforem),
                comments.json + CommentPool.ts (komentářová ruleta)
-  persistence/ SaveData.ts (SaveState typ)
+  persistence/ SaveData.ts (SaveState typ, **v2** s Clarity/lifetime/run)
 src/audio/     SoundManager.ts (Web Audio, syntetizované tóny)
 src/persistence/ SaveManager.ts (localStorage + autosave; mimo doménu)
 src/main.ts    ★ dev harness (DOM) — DOČASNÉ UI, plné UI = Fáze 8
@@ -189,17 +190,20 @@ Hráč dal 10 bodů; **vlna 1 hotová** (#1 auto-scroller čekání, #2 slider h
 > install chrome`, pak `vite preview` + krátký skript (debug hook `window.__dev` se přidává jen
 > dočasně a před commitem se maže).
 
-### Pak: Fáze 6 — Prestige (Dopamine Overdose)
-Overdose trigger (kritický DOP/s nebo milník) → kolaps/reset → **Clarity** měna → Zen shop
-(Digitální Mnich…) → **Doomscroll Wrapped** (C5). `totalDopamineEarned` už trackuju (základ pro Clarity).
+### ✅ Fáze 6 — Prestige (Dopamine Overdose) — HOTOVÁ
+`prestige()` → reset běhu za 🧘 **Clarity** (`clarityOnPrestige` = floor((total/1e6)^0.5)), **Zen shop**
+(trvalé Clarity upgrady ve 2. `clarity` store – přežijí reset, čteny stejnými gettery, **bez měkkého
+stropu**), **Doomscroll Wrapped** (C5), `Prestiged` event, save **v2** (clarity/lifetime/run, zpětně
+kompatibilní). Minihry **Skip-Ad** + **CAPTCHA** (M4) – spawn dle vydělaného Dopaminu, eventy `Ad*`/`Captcha*`.
 
-### Pak: Fáze 8 (plné UI + WebGL chaos shader), Fáze 9 (polish, balanc do JSON, achievementy, CAPTCHA/Skip-Ad minihry).
-Backlog: `docs/TODO.md` (T3 loading minihra zbývá).
+### Pak: Fáze 8 (plné UI + WebGL chaos shader), Fáze 9 (balanc do JSON, achievementy, narativní hlas, další minihry).
+Backlog: `docs/TODO.md` (T3 loading minihra zbývá; Outrage minihra). **Balanc prestige** (CLARITY_THRESHOLD/
+EXP, ceny Zen) je zatím odhad – chce playtest.
 
 ---
 
 ## 10. TL;DR pro start nové session
 1. Přečti tenhle soubor + `docs/GDD-06-Roadmap.md` (stav) + `docs/TODO.md` (backlog).
 2. Otevři `src/core/domain/Game.ts` — to je srdce.
-3. Vezmi **Vlnu 2** (nebo co řekne uživatel). Drž architekturu (doména bez UI), piš testy, drž `docs/` v synchronu.
+3. Vezmi další fázi (F8 UI / F9 balanc) nebo co řekne uživatel. Drž architekturu (doména bez UI), piš testy, drž `docs/` v synchronu.
 4. Po změně: typecheck → test → build → commit → push přes PAT (token od uživatele).

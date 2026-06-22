@@ -64,6 +64,11 @@ export class UpgradeStore {
     this.levels.set(id, this.level(id) + by);
   }
 
+  /** Vynuluje všechny úrovně (prestige reset běhu). Definice a křivky zůstávají. */
+  reset(): void {
+    this.levels.clear();
+  }
+
   serialize(): Record<string, number> {
     return Object.fromEntries(this.levels);
   }

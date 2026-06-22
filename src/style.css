@@ -921,3 +921,191 @@ html.disco body::before {
     background-position: 100% 50%;
   }
 }
+
+/* ── Fáze 6: HUD pills (Clarity / Overdose / Prestige) ── */
+.hud__clarity {
+  color: #2f9e44;
+}
+.hud__overdose {
+  color: #fff;
+  background: #e03131;
+  padding: 2px 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  align-self: center;
+  animation: pulse 0.8s ease-in-out infinite;
+}
+.hud__prestige {
+  color: #2f9e44;
+  font-size: 16px;
+  align-self: center;
+}
+
+/* ── Modals (Zen / Wrapped / CAPTCHA) ── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+}
+.modal[hidden] {
+  display: none;
+}
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.modal__box {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 20px 22px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.big-btn {
+  width: 100%;
+  font: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.big-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.big-btn--danger {
+  background: #e03131;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* Zen shop */
+.zen__summary {
+  margin-bottom: 12px;
+}
+.zen__cla {
+  font-size: 18px;
+  font-weight: 700;
+}
+.zen__muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.zen__title {
+  font-size: 13px;
+  margin: 16px 0 8px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.zen__shop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.zen__shop .upg {
+  width: 100%;
+}
+
+/* Doomscroll Wrapped */
+.wrapped__lead {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.wrapped__stats {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+}
+.wrapped__foot {
+  font-style: italic;
+  color: var(--muted);
+  margin: 0 0 14px;
+}
+
+/* CAPTCHA */
+.captcha__lead {
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+.cap__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.cap__cell {
+  aspect-ratio: 1;
+  font-size: 30px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.cap__cell.is-sel {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ── Skip-Ad banner ── */
+.ad-banner {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 92vw;
+  padding: 10px 14px;
+  background: #1c1c1c;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.ad-banner[hidden] {
+  display: none;
+}
+.ad-banner__label {
+  font-weight: 700;
+  font-size: 14px;
+}
+.ad-banner__skip {
+  font: inherit;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: #ffd43b;
+  color: #1c1c1c;
+  cursor: pointer;
+}
