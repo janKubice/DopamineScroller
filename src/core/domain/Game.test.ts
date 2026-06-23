@@ -141,8 +141,8 @@ describe('Game — upgrady', () => {
     expect(game.productionMultiplier.toNumber()).toBe(1);
     game.buy('echo_chamber', 1); // ×1.5
     expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.5, 5);
-    game.buy('clickbait', 1); // ×1.1
-    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.65, 5);
+    game.buy('clickbait', 1); // ×1.06
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.59, 5);
   });
 
   it('maxLevel se respektuje', () => {
@@ -174,14 +174,14 @@ describe('Game — bandwidth', () => {
   it('základní kapacita a spotřeba', () => {
     const game = new Game({ seed: 1 });
     expect(game.totalBandwidth).toBe(3);
-    expect(game.bandwidthConsumption).toBe(1); // 1 telefon
+    expect(game.bandwidthConsumption).toBe(1.5); // 1 telefon × 1.5 Mbps (text_it)
     expect(game.isOverloaded).toBe(false);
   });
 
   it('další telefony zvyšují spotřebu a můžou přetížit síť', () => {
     const game = new Game({ seed: 1 });
-    for (let i = 0; i < 5; i++) game.addPhone(); // 6 telefonů / kapacita 3
-    expect(game.bandwidthConsumption).toBe(6);
+    for (let i = 0; i < 5; i++) game.addPhone(); // 6 telefonů × 1.5 = 9 / kapacita 3
+    expect(game.bandwidthConsumption).toBe(9);
     expect(game.isOverloaded).toBe(true);
   });
 
@@ -404,7 +404,7 @@ describe('Game — early game pacing', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(10));
     expect(game.buy('energy_drink', 1)).toBe(1);
-    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.15, 5);
+    expect(game.productionMultiplier.toNumber()).toBeCloseTo(1.1, 5);
   });
 });
 
@@ -419,10 +419,10 @@ describe('Game — virality & Hidden Gems', () => {
     const game = new Game({ seed: 1 });
     expect(game.virality).toBe(0);
     game.wallet.add('DOP', BigNumber.of(1e7));
-    game.buy('third_eye', 3); // +1.5
-    expect(game.virality).toBeCloseTo(1.5, 5);
+    game.buy('third_eye', 3); // 3 × +0.4 = +1.2
+    expect(game.virality).toBeCloseTo(1.2, 5);
     game.buy('fake_news', 1); // +1.5
-    expect(game.virality).toBeCloseTo(3.0, 5);
+    expect(game.virality).toBeCloseTo(2.7, 5);
   });
 
   it('vysoká virality produkuje vzácné posty (Hidden Gems)', () => {
@@ -441,7 +441,7 @@ describe('Game — virality & Hidden Gems', () => {
   it('virality se serializuje jako base (bez dvojího počítání upgradů)', () => {
     const game = new Game({ seed: 1 });
     game.wallet.add('DOP', BigNumber.of(1e7));
-    game.buy('third_eye', 2); // virality 1.0
+    game.buy('third_eye', 2); // virality 0.8
     const restored = new Game({ seed: 2 });
     restored.loadSave(game.serialize());
     expect(restored.virality).toBeCloseTo(game.virality, 5);
@@ -974,16 +974,16 @@ describe('Game — rebalance měkkým stropem produkce (#5)', () => {
   it('nad prahem se exploze zploští, ale zůstává rostoucí', () => {
     const game = new Game({ seed: 1, upgrades: [up('m', { type: 'dopamineMultiplier', value: 10 })] });
     game.wallet.add('DOP', BigNumber.of(1e9));
-    game.buy('m', 10); // raw = 1e10 (log 10) -> compressed 6 + (10-6)*0.5 = 8 -> 1e8
+    game.buy('m', 10); // raw = 1e10 (log 10) -> compressed 2 + (10-2)*0.12 = 2.96
     expect(game.isProductionSoftCapped).toBe(true);
     expect(game.rawProductionMultiplier.log10()).toBeCloseTo(10, 6);
-    expect(game.productionMultiplier.log10()).toBeCloseTo(8, 6);
+    expect(game.productionMultiplier.log10()).toBeCloseTo(2.96, 6);
     expect(game.productionMultiplier.lt(game.rawProductionMultiplier)).toBe(true);
 
     const before = game.productionMultiplier.log10();
-    game.buy('m', 2); // raw log 12 -> compressed 6 + 6*0.5 = 9
+    game.buy('m', 2); // raw log 12 -> compressed 2 + (12-2)*0.12 = 3.2
     expect(game.productionMultiplier.log10()).toBeGreaterThan(before); // monotonní
-    expect(game.productionMultiplier.log10()).toBeCloseTo(9, 6);
+    expect(game.productionMultiplier.log10()).toBeCloseTo(3.2, 6);
   });
 
   it('měkký strop se promítne do odhadu DOP/s (ne surová exploze)', () => {
@@ -1002,7 +1002,7 @@ describe('Game — rebalance měkkým stropem produkce (#5)', () => {
     expect(capped.isProductionSoftCapped).toBe(true);
     // DPS škáluje s capped multiplikátorem; vše ostatní (swipy, rarita) je shodné -> poměr == multiplikátor
     const ratio = capped.estimatedDopaminePerSecond.div(baseline.estimatedDopaminePerSecond);
-    expect(ratio.log10()).toBeCloseTo(capped.productionMultiplier.log10(), 1); // ≈ 8, ne 10
+    expect(ratio.log10()).toBeCloseTo(capped.productionMultiplier.log10(), 1); // ≈ 2.96, ne 10
   });
 });
 
@@ -1079,8 +1079,8 @@ describe('Game — prestige / Dopamine Overdose (Fáze 6)', () => {
   });
 
   it('po nasbírání Dopaminu lze prestižovat → Clarity + reset běhu', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
-    readyAndSwipe(game); // ~1e8 vydělaného Dopaminu → ratio 100 → ~10 Clarity
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
+    readyAndSwipe(game); // ~1e12 vydělaného Dopaminu → ratio 100 → ~10 Clarity
     expect(game.canPrestige).toBe(true);
     const gain = game.clarityOnPrestige();
     expect(gain.gte(BigNumber.ONE)).toBe(true);
@@ -1101,7 +1101,7 @@ describe('Game — prestige / Dopamine Overdose (Fáze 6)', () => {
   });
 
   it('prestige vynuluje běhové upgrady, ale Clarity store zůstává', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     game.wallet.add('DOP', BigNumber.of(1e6));
     game.buy('clickbait', 3);
     expect(game.upgrades.level('clickbait')).toBe(3);
@@ -1111,7 +1111,7 @@ describe('Game — prestige / Dopamine Overdose (Fáze 6)', () => {
   });
 
   it('emituje Prestiged s Doomscroll Wrapped', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     let summary: { clarityGained: BigNumber; swipes: number } | null = null;
     game.bus.on('Prestiged', (e) => (summary = e.summary));
     readyAndSwipe(game);
@@ -1143,7 +1143,7 @@ describe('Game — Clarity (Zen) upgrady', () => {
   });
 
   it('Clarity upgrady přežijí prestige', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     game.wallet.add('CLA', BigNumber.of(100));
     game.buyClarity('digital_monk', 1);
     readyAndSwipe(game);
@@ -1248,10 +1248,10 @@ describe('Game — save v2 (prestige perzistence)', () => {
   });
 
   it('lifetime.prestiges přežije save/load', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     readyAndSwipe(game);
     game.prestige();
-    const restored = new Game({ seed: 2, platforms: richPlatform(1e8) });
+    const restored = new Game({ seed: 2, platforms: richPlatform(1e12) });
     restored.loadSave(game.serialize());
     expect(restored.lifetimeStats.prestiges).toBe(1);
   });
@@ -1332,7 +1332,7 @@ describe('Game — achievementy (F9)', () => {
   });
 
   it('achievementy přežijí prestige', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     game.addPhone();
     game.advance(0.1);
     expect(game.isAchievementUnlocked('two_screens')).toBe(true);
@@ -1402,7 +1402,7 @@ describe('Game — narativ „Hlas Algoritmu" (C4)', () => {
   });
 
   it('prestige hláška zazní po prvním prestige', () => {
-    const game = new Game({ seed: 1, platforms: richPlatform(1e8) });
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
     const lines: string[] = [];
     game.bus.on('AlgorithmSpeaks', (e) => lines.push(e.id));
     readyAndSwipe(game);

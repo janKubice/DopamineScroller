@@ -172,7 +172,7 @@ const OFFLINE_EFFICIENCY_CAP = 1; // offline efektivita nemůže přesáhnout 10
 const UNLOCK_TEASER_FRACTION = 0.5; // zamčený (jen práh Dopaminu) se v UI ukáže, když je práh z poloviny dosažen
 
 // ── Prestige / Dopamine Overdose (Fáze 6) ──
-const CLARITY_THRESHOLD = 1e6; // kolik vydělaného Dopaminu = 1 Clarity (práh prestige)
+export const CLARITY_THRESHOLD = 1e10; // kolik vydělaného Dopaminu = 1 Clarity (práh prestige) – laděno pro ~45–60 min
 const CLARITY_EXP = 0.5; // sqrt škálování: ×100 Dopaminu ≈ ×10 Clarity (klesající výnos)
 const OVERDOSE_DPS_LOG10 = 9; // nad ~1e9 Dopaminu/s je „Overdose" (UI flavor + pobídka k prestige)
 
@@ -193,8 +193,8 @@ const CAPTCHA_REWARD_FACTOR = 25; // odměna ≈ 25 swipů (těžší minihra = 
 // ── Rebalance (#5): měkký strop globálního multiplikátoru produkce ──
 // Pod prahem se nic nemění (zachová early/mid balanc), nad ním se exponenciální exploze
 // stlačí v log prostoru (klesající výnos), ať se hra „od jisté fáze nezlomí".
-const PRODUCTION_SOFTCAP_LOG10 = 6; // práh ×1e6 produkce
-const PRODUCTION_COMPRESSION = 0.5; // nad prahem se každý řád počítá jen z poloviny
+const PRODUCTION_SOFTCAP_LOG10 = 2; // práh ×100 produkce (zapne se brzy → plató místo exploze)
+const PRODUCTION_COMPRESSION = 0.12; // silné zploštění nad prahem (plató)
 
 /** Zaokrouhlí BigNumber dolů (pro celočíselnou Clarity); obří hodnoty nechá být. */
 function bigFloor(b: BigNumber): BigNumber {
@@ -222,10 +222,11 @@ const SHARE_BY_RARITY: Readonly<Record<Rarity, number>> = { common: 0, rare: 1, 
 export const REACTION_WINDOW = 4; // s
 
 function rarityChances(virality: number): { legendary: number; epic: number; rare: number } {
+  // Zastropováno, ať virality neexploduje rarity multiplikátor donekonečna (rebalance).
   return {
-    legendary: 0.001 * (1 + virality),
-    epic: 0.01 * (1 + virality),
-    rare: 0.05 * (1 + virality),
+    legendary: Math.min(0.1, 0.001 * (1 + virality)),
+    epic: Math.min(0.2, 0.01 * (1 + virality)),
+    rare: Math.min(0.5, 0.05 * (1 + virality)),
   };
 }
 
