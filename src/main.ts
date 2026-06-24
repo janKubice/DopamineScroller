@@ -46,6 +46,7 @@ app.innerHTML = `
         <input type="range" id="volume" min="0" max="1" step="0.05" />
       </label>
       <button class="icon-btn" id="achBtn" title="Achievements">🏆</button>
+      <button class="icon-btn" id="styleBtn" title="Style — toggle your cosmetics" hidden>🎨</button>
       <button class="icon-btn" id="zenBtn" title="Zen / Prestige">🧘</button>
       <button class="icon-btn topbar__settings" id="mute" title="Mute" aria-label="Mute">🔊</button>
     </div>
@@ -479,7 +480,7 @@ const MAX_FLOATS = 36; // strop, ať se DOM nezahltí při stovkách swipů/s
 
 function spawnFloat(phoneId: number, text: string, kind: 'dop' | 'gem' | 'jackpot'): void {
   if (floatLayer.childElementCount >= MAX_FLOATS) return;
-  const big = kind !== 'dop' || game.upgrades.level('combo_text') > 0;
+  const big = kind !== 'dop' || cosmeticOn('combo_text');
   const el = document.createElement('div');
   el.className = `float float--${kind}${big ? ' float--big' : ''}`;
   el.textContent = text;
@@ -511,7 +512,7 @@ function pulseCard(phoneId: number): void {
 
 // Haptic Overdrive (cosmetic): jackpot roztřese obrazovku.
 function screenShake(): void {
-  if (game.upgrades.level('screen_shake') === 0) return;
+  if (!cosmeticOn('screen_shake')) return;
   document.documentElement.classList.add('shaking');
   window.setTimeout(() => document.documentElement.classList.remove('shaking'), 420);
 }
@@ -595,7 +596,7 @@ game.bus.on('HiddenGemFound', (e) => {
   sound.gem();
   pushNote(`💎 ${e.rarity.toUpperCase()}!`, 'note--gem', 3000);
   // Confetti Cannon (cosmetic): 3× konfety na vzácných postech.
-  const cannon = game.upgrades.level('confetti_cannon') > 0 ? 3 : 1;
+  const cannon = cosmeticOn('confetti_cannon') ? 3 : 1;
   confetti((CONFETTI_BY_RARITY[e.rarity] ?? 12) * cannon);
 });
 // Vlna 2: jackpot (crit) swipe — velká výplata, ať to „cinkne".
@@ -677,12 +678,47 @@ function confetti(count: number): void {
   }
 }
 
-// ── Theme: Dark Mode upgrade flips the whole UI ──
-function applyTheme(): void {
-  document.documentElement.classList.toggle('dark', game.upgrades.level('dark_mode') > 0);
+// ── Cosmetics Style menu: odděl „vlastněno" (= trvalý Dopamin bonus, doména) od „zobrazeno"
+// (= vizuál, přepínatelné). Stav zobrazení persistován v localStorage (per-zařízení). ──
+const STYLE_OFF_KEY = 'ds-cosmetics-off'; // ids RUČNĚ vypnutých kosmetik
+const REDUCE_MOTION_KEY = 'ds-reduce-motion';
+/** Motion-heavy efekty, které „Reduce motion" potlačí (i když jsou jinak zapnuté). */
+const MOTION_COSMETICS = new Set(['screen_shake', 'disco_ball', 'confetti_cannon']);
+
+const disabledCosmetics = new Set<string>(loadJson<string[]>(STYLE_OFF_KEY, []));
+let reduceMotion = localStorage.getItem(REDUCE_MOTION_KEY) === '1';
+
+function loadJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function persistStyle(): void {
+  localStorage.setItem(STYLE_OFF_KEY, JSON.stringify([...disabledCosmetics]));
+  localStorage.setItem(REDUCE_MOTION_KEY, reduceMotion ? '1' : '0');
 }
 
-// ── Cosmetic skins (#3): vlastněný upgrade přepne vizuální třídu na <html> ──
+/** Je kosmetika vlastněná A zapnutá? (+ u motion efektů respektuje Reduce motion.) */
+function cosmeticOn(id: string): boolean {
+  if (game.upgrades.level(id) <= 0) return false;
+  if (disabledCosmetics.has(id)) return false;
+  if (reduceMotion && MOTION_COSMETICS.has(id)) return false;
+  return true;
+}
+/** Vlastní hráč aspoň jednu kosmetiku? (řídí viditelnost 🎨 tlačítka) */
+function ownsAnyCosmetic(): boolean {
+  return game.upgradeView().some((u) => u.category === 'cosmetics' && u.level > 0);
+}
+
+// ── Theme: Dark Mode upgrade flips the whole UI (respektuje Style přepínač) ──
+function applyTheme(): void {
+  document.documentElement.classList.toggle('dark', cosmeticOn('dark_mode'));
+}
+
+// ── Cosmetic skins (#3): zapnutá vlastněná kosmetika přepne vizuální třídu na <html> ──
 const COSMETIC_CLASSES: ReadonlyArray<[id: string, cls: string]> = [
   ['neon_mode', 'neon'],
   ['crt_filter', 'crt'],
@@ -692,8 +728,10 @@ const COSMETIC_CLASSES: ReadonlyArray<[id: string, cls: string]> = [
 ];
 function applyCosmetics(): void {
   for (const [id, cls] of COSMETIC_CLASSES) {
-    document.documentElement.classList.toggle(cls, game.upgrades.level(id) > 0);
+    document.documentElement.classList.toggle(cls, cosmeticOn(id));
   }
+  document.documentElement.classList.toggle('reduce-motion', reduceMotion);
+  byId('styleBtn').hidden = !ownsAnyCosmetic();
 }
 
 // ── FIX2: visible penalty when the network is overloaded ──
@@ -1069,6 +1107,71 @@ game.bus.on('AchievementUnlocked', (e) => {
   pushNote(`🏆 Achievement: ${e.icon} ${e.name}`, 'note--gem', 3600);
   confetti(16);
 });
+
+// ── Cosmetics Style menu (🎨): zapni/vypni/kombinuj vlastněné kosmetiky (persist localStorage) ──
+const styleModal = document.createElement('div');
+styleModal.className = 'modal';
+styleModal.hidden = true;
+document.body.appendChild(styleModal);
+
+function renderStyleModal(): void {
+  const owned = game.upgradeView().filter((u) => u.category === 'cosmetics' && u.level > 0);
+  const rows = owned
+    .map((c) => {
+      const on = cosmeticOn(c.id);
+      const muted = reduceMotion && MOTION_COSMETICS.has(c.id);
+      return `
+      <label class="style-row ${on ? 'is-on' : ''}">
+        <span class="style-row__icon">${c.icon}</span>
+        <span class="style-row__body"><b>${escapeHtml(c.name)}</b>${
+          muted ? '<span class="style-row__hint">muted by Reduce motion</span>' : ''
+        }</span>
+        <input type="checkbox" class="style-toggle" data-cos="${c.id}" ${
+          disabledCosmetics.has(c.id) ? '' : 'checked'
+        } />
+      </label>`;
+    })
+    .join('');
+  styleModal.innerHTML = `
+    <div class="modal__backdrop" data-sclose></div>
+    <div class="modal__box style-box">
+      <header class="modal__head"><span>🎨 Style — your cosmetics</span><button class="icon-btn" data-sclose>✕</button></header>
+      <p class="style-intro">Owning a cosmetic keeps its Dopamine bonus forever — these switches only change how the game <i>looks</i>. Combine as many as you like.</p>
+      <label class="style-row style-row--master">
+        <span class="style-row__icon">🍃</span>
+        <span class="style-row__body"><b>Reduce motion</b><span class="style-row__hint">calm the shaking, flashing &amp; disco</span></span>
+        <input type="checkbox" id="reduceMotionToggle" ${reduceMotion ? 'checked' : ''} />
+      </label>
+      <div class="style-list">${rows || '<p class="style-empty">Buy a cosmetic upgrade to start customizing.</p>'}</div>
+    </div>`;
+  for (const el of Array.from(styleModal.querySelectorAll('[data-sclose]'))) {
+    el.addEventListener('click', () => (styleModal.hidden = true));
+  }
+  for (const el of Array.from(styleModal.querySelectorAll<HTMLInputElement>('.style-toggle'))) {
+    el.addEventListener('change', () => {
+      const id = el.dataset.cos!;
+      if (el.checked) disabledCosmetics.delete(id);
+      else disabledCosmetics.add(id);
+      persistStyle();
+      applyTheme();
+      applyCosmetics();
+      renderStyleModal();
+    });
+  }
+  const rm = styleModal.querySelector<HTMLInputElement>('#reduceMotionToggle');
+  rm?.addEventListener('change', () => {
+    reduceMotion = rm.checked;
+    persistStyle();
+    applyTheme();
+    applyCosmetics();
+    renderStyleModal();
+  });
+}
+function openStyle(): void {
+  renderStyleModal();
+  styleModal.hidden = false;
+}
+byId('styleBtn').addEventListener('click', openStyle);
 
 // ── Fáze 9 (C4): „Hlas Algoritmu" — systémový banner ──
 const algoBanner = document.createElement('div');

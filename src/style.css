@@ -1376,6 +1376,101 @@ html.disco body::before {
   color: var(--muted);
 }
 
+/* ── Cosmetics Style menu (🎨) ── */
+.style-box {
+  max-width: 460px;
+}
+.style-intro {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.style-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.style-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.style-row.is-on {
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.style-row--master {
+  margin-bottom: 12px;
+  opacity: 1;
+  border-style: dashed;
+}
+.style-row__icon {
+  font-size: 24px;
+  width: 32px;
+  text-align: center;
+}
+.style-row__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.style-row__hint {
+  font-size: 11px;
+  color: var(--muted);
+}
+.style-empty {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  padding: 12px;
+}
+/* switch */
+.style-row input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--border);
+  cursor: pointer;
+  flex: none;
+  transition: background 0.15s ease;
+}
+.style-row input[type='checkbox']:checked {
+  background: var(--accent);
+}
+.style-row input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+.style-row input[type='checkbox']:checked::after {
+  transform: translateX(18px);
+}
+/* Reduce motion: ztlum dekorativní nekonečné animace */
+html.reduce-motion .disco-bg,
+html.reduce-motion [class*='shake'],
+html.reduce-motion .confetti {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+}
+
 /* ── Fáze 9 (C4): „Hlas Algoritmu" banner ── */
 .algo {
   position: fixed;
