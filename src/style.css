@@ -922,6 +922,106 @@ html.disco body::before {
   }
 }
 
+/* ── Cosmetics: nové efekty + skiny ── */
+/* Combinovatelné celoobrazovkové overlaye (každý vlastní vrstva). */
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* za obsahem */
+  pointer-events: none;
+}
+.fx {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.fx.on {
+  opacity: 1;
+}
+/* 🐱 Kitten Wallpaper — dlaždicované kočičky (emoji v SVG data-URI). */
+.fx--kittens {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'><text x='10' y='45' font-size='38'>🐱</text><text x='52' y='85' font-size='30'>🐾</text></svg>");
+  background-size: 90px 90px;
+  opacity: 0;
+}
+.fx--kittens.on {
+  opacity: 0.16;
+}
+/* 🌌 Aurora Overload — pomalu plující barevná polární záře. */
+.fx--aurora {
+  background:
+    radial-gradient(120% 80% at 20% 0%, rgba(0, 255, 170, 0.35), transparent 60%),
+    radial-gradient(120% 80% at 80% 10%, rgba(120, 0, 255, 0.35), transparent 60%),
+    radial-gradient(140% 90% at 50% 100%, rgba(0, 140, 255, 0.3), transparent 60%);
+  background-size: 200% 200%;
+  filter: blur(8px);
+}
+.fx--aurora.on {
+  opacity: 0.9;
+  animation: aurora-drift 16s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+/* 🌠 Galaxy Brain — hvězdné pole + jemné víření. */
+.fx--galaxy {
+  background:
+    radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 70% 60%, #cfe, transparent),
+    radial-gradient(2px 2px at 40% 80%, #fff, transparent),
+    radial-gradient(1px 1px at 85% 20%, #fff, transparent),
+    radial-gradient(1.5px 1.5px at 55% 15%, #ffd, transparent),
+    radial-gradient(120% 120% at 50% 50%, rgba(40, 0, 80, 0.55), rgba(0, 0, 10, 0.85));
+  background-size: 100% 100%;
+}
+.fx--galaxy.on {
+  opacity: 0.92;
+  animation: galaxy-spin 90s linear infinite;
+}
+@keyframes galaxy-spin {
+  0% { transform: rotate(0deg) scale(1.4); }
+  100% { transform: rotate(360deg) scale(1.4); }
+}
+/* 📷 Sepia Nostalgia — teplý nádech přes obraz (nad obsahem, pod modaly). */
+.fx--sepia {
+  z-index: 88;
+  background: #5a3a1a;
+  mix-blend-mode: color;
+}
+.fx--sepia.on {
+  opacity: 0.45;
+}
+/* 🌈 Rainbow Everything — duhový posuv velkých čísel (HUD + plovoucí). */
+html.rainbow .hud,
+html.rainbow .float-num {
+  animation: rainbow-hue 6s linear infinite;
+}
+@keyframes rainbow-hue {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+/* 👑 Golden Thumb (achievement reward) — královská zlatá. */
+html.golden-thumb {
+  --accent: #ffcf33;
+}
+html.golden-thumb .brand,
+html.golden-thumb .drawer-fab {
+  text-shadow: 0 0 8px rgba(255, 207, 51, 0.8);
+}
+html.golden-thumb .phone {
+  border-color: #ffcf33;
+  box-shadow: 0 0 14px rgba(255, 207, 51, 0.4);
+}
+/* 🌱 Touched Grass (achievement reward) — klidný zelený nádech. */
+html.grass {
+  --accent: #5fbf60;
+}
+html.grass body {
+  background: linear-gradient(180deg, var(--bg) 70%, rgba(95, 191, 96, 0.12));
+}
+
 /* ── Fáze 6: HUD pills (Clarity / Overdose / Prestige) ── */
 .hud__clarity {
   color: #2f9e44;

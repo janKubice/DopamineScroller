@@ -64,9 +64,18 @@ export class UpgradeStore {
     this.levels.set(id, this.level(id) + by);
   }
 
-  /** Vynuluje všechny úrovně (prestige reset běhu). Definice a křivky zůstávají. */
-  reset(): void {
-    this.levels.clear();
+  /**
+   * Vynuluje úrovně (prestige reset běhu). Definice a křivky zůstávají.
+   * `keep` ids se zachovají (kosmetiky jsou „sbírka" – přežijí prestige, viz Game.prestige).
+   */
+  reset(keep?: ReadonlySet<string>): void {
+    if (!keep || keep.size === 0) {
+      this.levels.clear();
+      return;
+    }
+    for (const id of [...this.levels.keys()]) {
+      if (!keep.has(id)) this.levels.delete(id);
+    }
   }
 
   serialize(): Record<string, number> {

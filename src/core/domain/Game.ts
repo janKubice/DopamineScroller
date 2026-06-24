@@ -972,6 +972,11 @@ export class Game implements Tickable {
   // ── Prestige / Dopamine Overdose (Fáze 6) ───────────────────────────────────
 
   /** Kolik Clarity by dal prestige právě teď: floor((total/THRESH)^EXP), 0 pod prahem. */
+  /** Ids kosmetik (kategorie cosmetics) – „sbírka", která přežívá prestige. */
+  private get cosmeticIds(): ReadonlySet<string> {
+    return new Set(this.upgrades.all.filter((d) => categoryOf(d) === 'cosmetics').map((d) => d.id));
+  }
+
   clarityOnPrestige(): BigNumber {
     const total = this.totalDopamine;
     if (total.lt(BigNumber.of(CLARITY_THRESHOLD))) return BigNumber.ZERO;
@@ -1031,8 +1036,9 @@ export class Game implements Tickable {
     for (const id of ['DOP', 'LIK', 'COM', 'SHR', 'BR'] as CurrencyId[]) this.wallet.set(id, BigNumber.ZERO);
     this.wallet.add('CLA', gain);
 
-    // Reset běhu (Clarity store NEresetujeme – je trvalý).
-    this.upgrades.reset();
+    // Reset běhu (Clarity store NEresetujeme – je trvalý). Kosmetiky jsou „sbírka" a přežijí
+    // prestige (vč. Clarity-placených a achievement-unlocked) – hráč o svůj vzhled nepřijde.
+    this.upgrades.reset(this.cosmeticIds);
     this.streakValue = STREAK_FLOOR;
     this.viralityBase = 0;
     this.totalDopamine = BigNumber.ZERO;
@@ -1242,6 +1248,10 @@ export class Game implements Tickable {
       if (this.unlockedAchievements.has(a.id)) continue;
       if (this.achievementMet(a)) {
         this.unlockedAchievements.add(a.id);
+        // Odměna: udělí kosmetiku (vizuál za hraní). Idempotentní; po loadu dorovná staré savy.
+        if (a.reward && this.upgrades.def(a.reward) && this.upgrades.level(a.reward) <= 0) {
+          this.upgrades.incrementLevel(a.reward, 1);
+        }
         if (emit) this.bus.emit('AchievementUnlocked', { id: a.id, name: a.name, icon: a.icon });
       }
     }

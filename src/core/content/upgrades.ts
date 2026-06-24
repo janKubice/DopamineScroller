@@ -145,6 +145,9 @@ export interface UpgradeDef {
   readonly category?: UpgradeCategory;
 }
 
+/** Sentinel prahu odemčení: kosmetika je POUZE odměna za achievement (normálně nedosažitelná/nekoupitelná). */
+export const ACHIEVEMENT_ONLY = Number.MAX_SAFE_INTEGER;
+
 export const UPGRADES: readonly UpgradeDef[] = [
   // ── Early game (levné, hned je co kupovat – záměrně bez zámků) ──
   {
@@ -591,6 +594,85 @@ export const UPGRADES: readonly UpgradeDef[] = [
     maxLevel: 1,
     effect: { type: 'dopamineMultiplier', value: 1.2 },
     unlock: { dopamine: 120000000 },
+    category: 'cosmetics',
+  },
+  // ── Nové efekty + skiny na pozadí (DOP) ──
+  {
+    id: 'sepia_mode',
+    name: 'Sepia Nostalgia',
+    description: 'Everything looks like a warm, faded memory of a simpler time. +15% Dopamine.',
+    icon: '📷',
+    cost: { currency: 'DOP', base: 80000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.15 },
+    unlock: { dopamine: 50000 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'kitten_bg',
+    name: 'Kitten Wallpaper',
+    description: 'A soothing wall of kittens behind the feed. Purely for your wellbeing. +18% Dopamine.',
+    icon: '🐱',
+    cost: { currency: 'DOP', base: 300000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.18 },
+    unlock: { dopamine: 200000 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'rainbow_text',
+    name: 'Rainbow Everything',
+    description: 'Every number shimmers through the entire spectrum. Tasteful. +20% Dopamine.',
+    icon: '🌈',
+    cost: { currency: 'DOP', base: 1500000, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.2 },
+    unlock: { dopamine: 1000000 },
+    category: 'cosmetics',
+  },
+  // ── „Hyper" kosmetiky za Clarity (vzácná měna z prestige). Přežijí prestige jako každá kosmetika;
+  // nemají dopamine-unlock (ten by se po prestige resetoval) – gate je jen cena v 🧠 Clarity. ──
+  {
+    id: 'aurora_skin',
+    name: 'Aurora Overload',
+    description: 'A living aurora ripples behind everything. Paid in hard-won Clarity. +6% Dopamine.',
+    icon: '🌌',
+    cost: { currency: 'CLA', base: 3, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.06 },
+    category: 'cosmetics',
+  },
+  {
+    id: 'galaxy_brain',
+    name: 'Galaxy Brain',
+    description: 'You have ascended. A whole galaxy slowly swirls behind the feed. +8% Dopamine.',
+    icon: '🌠',
+    cost: { currency: 'CLA', base: 10, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.08 },
+    category: 'cosmetics',
+  },
+  // ── Odměny za achievementy (nekupují se – udělí se při odemčení; viz Game.checkAchievements) ──
+  {
+    id: 'golden_thumb',
+    name: 'Golden Thumb',
+    description: 'Reward for Thumb of Steel. A regal gold sheen for a thumb that never rests. +12% Dopamine.',
+    icon: '👑',
+    cost: { currency: 'DOP', base: 1, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.12 },
+    unlock: { dopamine: ACHIEVEMENT_ONLY },
+    category: 'cosmetics',
+  },
+  {
+    id: 'grass_filter',
+    name: 'Touched Grass',
+    description: 'Reward for your first prestige. A gentle green calm settles over the feed. +12% Dopamine.',
+    icon: '🌱',
+    cost: { currency: 'DOP', base: 1, multiplier: 1 },
+    maxLevel: 1,
+    effect: { type: 'dopamineMultiplier', value: 1.12 },
+    unlock: { dopamine: ACHIEVEMENT_ONLY },
     category: 'cosmetics',
   },
 

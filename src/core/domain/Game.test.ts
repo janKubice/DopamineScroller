@@ -1118,6 +1118,37 @@ describe('Game — prestige / Dopamine Overdose (Fáze 6)', () => {
     game.prestige();
     expect(summary).not.toBeNull();
   });
+
+  it('kosmetiky jsou „sbírka" – přežijí prestige, běhové upgrady se resetují', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
+    game.wallet.add('DOP', BigNumber.of(1e6));
+    game.buy('dark_mode', 1); // kosmetika (kategorie cosmetics)
+    game.buy('clickbait', 1); // běhový upgrade
+    readyAndSwipe(game);
+    game.prestige();
+    expect(game.upgrades.level('dark_mode')).toBe(1); // kosmetika zůstává
+    expect(game.upgrades.level('clickbait')).toBe(0); // běh resetován
+  });
+
+  it('„hyper" kosmetiku za Clarity lze koupit za CLA a přežije prestige', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
+    game.wallet.add('CLA', BigNumber.of(20));
+    expect(game.buy('aurora_skin', 1)).toBe(1); // platí Clarity
+    expect(game.upgrades.level('aurora_skin')).toBe(1);
+    readyAndSwipe(game);
+    game.prestige();
+    expect(game.upgrades.level('aurora_skin')).toBe(1); // kosmetika přežije reset
+  });
+
+  it('achievement uděluje kosmetiku (Touched Grass → grass_filter po 1. prestige)', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
+    readyAndSwipe(game);
+    expect(game.upgrades.level('grass_filter')).toBe(0);
+    game.prestige();
+    game.advance(0.1); // checkAchievements běží v ticku
+    expect(game.isAchievementUnlocked('touched_grass')).toBe(true);
+    expect(game.upgrades.level('grass_filter')).toBe(1); // udělena a (jako kosmetika) trvalá
+  });
 });
 
 describe('Game — Clarity (Zen) upgrady', () => {

@@ -683,7 +683,14 @@ function confetti(count: number): void {
 const STYLE_OFF_KEY = 'ds-cosmetics-off'; // ids RUČNĚ vypnutých kosmetik
 const REDUCE_MOTION_KEY = 'ds-reduce-motion';
 /** Motion-heavy efekty, které „Reduce motion" potlačí (i když jsou jinak zapnuté). */
-const MOTION_COSMETICS = new Set(['screen_shake', 'disco_ball', 'confetti_cannon']);
+const MOTION_COSMETICS = new Set([
+  'screen_shake',
+  'disco_ball',
+  'confetti_cannon',
+  'rainbow_text',
+  'aurora_skin',
+  'galaxy_brain',
+]);
 
 const disabledCosmetics = new Set<string>(loadJson<string[]>(STYLE_OFF_KEY, []));
 let reduceMotion = localStorage.getItem(REDUCE_MOTION_KEY) === '1';
@@ -719,17 +726,33 @@ function applyTheme(): void {
 }
 
 // ── Cosmetic skins (#3): zapnutá vlastněná kosmetika přepne vizuální třídu na <html> ──
+// Recolor/text efekty = třída na <html>. Celoobrazovkové (kombinovatelné) skiny jdou přes fx-layer.
 const COSMETIC_CLASSES: ReadonlyArray<[id: string, cls: string]> = [
   ['neon_mode', 'neon'],
   ['crt_filter', 'crt'],
   ['vaporwave', 'vaporwave'],
   ['gold_rush', 'gold'],
   ['disco_ball', 'disco'],
+  ['rainbow_text', 'rainbow'],
+  ['golden_thumb', 'golden-thumb'],
+  ['grass_filter', 'grass'],
 ];
+// Combinovatelné celoobrazovkové overlay efekty (každý vlastní vrstva → jdou naráz).
+const fxLayer = document.createElement('div');
+fxLayer.className = 'fx-layer';
+fxLayer.innerHTML = `
+  <div class="fx fx--kittens" data-fx="kitten_bg"></div>
+  <div class="fx fx--aurora" data-fx="aurora_skin"></div>
+  <div class="fx fx--galaxy" data-fx="galaxy_brain"></div>
+  <div class="fx fx--sepia" data-fx="sepia_mode"></div>`;
+document.body.appendChild(fxLayer);
+const FX_OVERLAYS = Array.from(fxLayer.querySelectorAll<HTMLElement>('.fx'));
+
 function applyCosmetics(): void {
   for (const [id, cls] of COSMETIC_CLASSES) {
     document.documentElement.classList.toggle(cls, cosmeticOn(id));
   }
+  for (const el of FX_OVERLAYS) el.classList.toggle('on', cosmeticOn(el.dataset.fx!));
   document.documentElement.classList.toggle('reduce-motion', reduceMotion);
   byId('styleBtn').hidden = !ownsAnyCosmetic();
 }
