@@ -292,11 +292,59 @@ interface RunStats {
   seconds: number;
 }
 
-/** Doživotní statistiky (přežijí prestige). */
+/** Doživotní statistiky (přežijí prestige). Akumulátory se na prestige navýší o runStats. */
 interface LifetimeStats {
   prestiges: number;
   clarityEarned: BigNumber;
   dopamineAllTime: BigNumber;
+  // all-time akumulátory (uzavřené běhy; aktuální běh se přičítá až ve statsView)
+  swipes: number;
+  likes: number;
+  comments: number;
+  gems: number;
+  jackpots: number;
+  seconds: number;
+  // rekordy
+  bestDopPerSec: BigNumber;
+  maxPhones: number;
+  fastestPrestigeSec: number; // 0 = zatím žádné prestige
+}
+
+/** Strukturovaný pohled na statistiky (Fáze 4): tento běh + doživotní + rekordy. */
+export interface StatsView {
+  run: {
+    seconds: number;
+    swipes: number;
+    likes: number;
+    comments: number;
+    gems: number;
+    jackpots: number;
+    dopamine: BigNumber;
+    dopPerSec: BigNumber;
+    production: BigNumber;
+    phones: number;
+    platform: string;
+    chaos: number;
+    attention: number;
+    maxAttention: number;
+  };
+  lifetime: {
+    prestiges: number;
+    clarityEarned: BigNumber;
+    dopamineAllTime: BigNumber;
+    swipes: number;
+    likes: number;
+    comments: number;
+    gems: number;
+    jackpots: number;
+    seconds: number;
+  };
+  records: {
+    bestDopPerSec: BigNumber;
+    maxPhones: number;
+    fastestPrestigeSec: number;
+  };
+  achievements: { unlocked: number; total: number };
 }
 
 /** Na co má auto-scroller čekat, než post swipne (M1/T4). */
@@ -344,7 +392,20 @@ export class Game implements Tickable {
   private nextCaptchaId = 1;
   // Statistiky (Doomscroll Wrapped + lifetime)
   private runStats: RunStats = { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
-  private lifetime: LifetimeStats = { prestiges: 0, clarityEarned: BigNumber.ZERO, dopamineAllTime: BigNumber.ZERO };
+  private lifetime: LifetimeStats = {
+    prestiges: 0,
+    clarityEarned: BigNumber.ZERO,
+    dopamineAllTime: BigNumber.ZERO,
+    swipes: 0,
+    likes: 0,
+    comments: 0,
+    gems: 0,
+    jackpots: 0,
+    seconds: 0,
+    bestDopPerSec: BigNumber.ZERO,
+    maxPhones: 1,
+    fastestPrestigeSec: 0,
+  };
   // Achievementy + narativ (Fáze 9) – trvalé (přežijí prestige, ukládají se)
   private readonly unlockedAchievements = new Set<string>();
   private readonly seenNarrative = new Set<string>();
@@ -1009,6 +1070,47 @@ export class Game implements Tickable {
     return { ...this.lifetime };
   }
 
+  /** Strukturovaný pohled na statistiky (Fáze 4) – záložka 📊. Doživotní = uzavřené běhy + aktuální. */
+  statsView(): StatsView {
+    const l = this.lifetime;
+    const r = this.runStats;
+    return {
+      run: {
+        seconds: r.seconds,
+        swipes: r.swipes,
+        likes: r.likes,
+        comments: r.comments,
+        gems: r.gems,
+        jackpots: r.jackpots,
+        dopamine: this.totalDopamine,
+        dopPerSec: this.estimatedDopaminePerSecond,
+        production: this.productionMultiplier,
+        phones: this.phones.length,
+        platform: this.activePlatform.name,
+        chaos: this.chaosLevel,
+        attention: this.attentionValue,
+        maxAttention: this.maxAttention,
+      },
+      lifetime: {
+        prestiges: l.prestiges,
+        clarityEarned: l.clarityEarned,
+        dopamineAllTime: l.dopamineAllTime.add(this.totalDopamine),
+        swipes: l.swipes + r.swipes,
+        likes: l.likes + r.likes,
+        comments: l.comments + r.comments,
+        gems: l.gems + r.gems,
+        jackpots: l.jackpots + r.jackpots,
+        seconds: l.seconds + r.seconds,
+      },
+      records: {
+        bestDopPerSec: l.bestDopPerSec,
+        maxPhones: l.maxPhones,
+        fastestPrestigeSec: l.fastestPrestigeSec,
+      },
+      achievements: { unlocked: this.achievementsUnlockedCount, total: this.achievementsTotal },
+    };
+  }
+
   /** Aktuální „Doomscroll Wrapped" data tohoto běhu (náhled bez resetu). */
   wrapped(): WrappedSummary {
     return {
@@ -1031,6 +1133,16 @@ export class Game implements Tickable {
     this.lifetime.prestiges += 1;
     this.lifetime.clarityEarned = this.lifetime.clarityEarned.add(gain);
     this.lifetime.dopamineAllTime = this.lifetime.dopamineAllTime.add(this.totalDopamine);
+    // Akumuluj uzavřený běh do doživotních součtů + zaznamenej rekord nejrychlejšího prestige.
+    this.lifetime.swipes += this.runStats.swipes;
+    this.lifetime.likes += this.runStats.likes;
+    this.lifetime.comments += this.runStats.comments;
+    this.lifetime.gems += this.runStats.gems;
+    this.lifetime.jackpots += this.runStats.jackpots;
+    this.lifetime.seconds += this.runStats.seconds;
+    if (this.lifetime.fastestPrestigeSec === 0 || this.runStats.seconds < this.lifetime.fastestPrestigeSec) {
+      this.lifetime.fastestPrestigeSec = this.runStats.seconds;
+    }
 
     // Měny: vynuluj běhové, ponech a navyš Clarity.
     for (const id of ['DOP', 'LIK', 'COM', 'SHR', 'BR'] as CurrencyId[]) this.wallet.set(id, BigNumber.ZERO);
@@ -1303,6 +1415,15 @@ export class Game implements Tickable {
         prestiges: this.lifetime.prestiges,
         clarityEarned: this.lifetime.clarityEarned.serialize(),
         dopamineAllTime: this.lifetime.dopamineAllTime.serialize(),
+        swipes: this.lifetime.swipes,
+        likes: this.lifetime.likes,
+        comments: this.lifetime.comments,
+        gems: this.lifetime.gems,
+        jackpots: this.lifetime.jackpots,
+        seconds: this.lifetime.seconds,
+        bestDopPerSec: this.lifetime.bestDopPerSec.serialize(),
+        maxPhones: this.lifetime.maxPhones,
+        fastestPrestigeSec: this.lifetime.fastestPrestigeSec,
       },
       run: { ...this.runStats },
       achievements: [...this.unlockedAchievements],
@@ -1339,8 +1460,32 @@ export class Game implements Tickable {
           prestiges: data.lifetime.prestiges,
           clarityEarned: BigNumber.deserialize(data.lifetime.clarityEarned),
           dopamineAllTime: BigNumber.deserialize(data.lifetime.dopamineAllTime),
+          swipes: data.lifetime.swipes ?? 0,
+          likes: data.lifetime.likes ?? 0,
+          comments: data.lifetime.comments ?? 0,
+          gems: data.lifetime.gems ?? 0,
+          jackpots: data.lifetime.jackpots ?? 0,
+          seconds: data.lifetime.seconds ?? 0,
+          bestDopPerSec: data.lifetime.bestDopPerSec
+            ? BigNumber.deserialize(data.lifetime.bestDopPerSec)
+            : BigNumber.ZERO,
+          maxPhones: data.lifetime.maxPhones ?? data.phoneCount ?? 1,
+          fastestPrestigeSec: data.lifetime.fastestPrestigeSec ?? 0,
         }
-      : { prestiges: 0, clarityEarned: BigNumber.ZERO, dopamineAllTime: BigNumber.ZERO };
+      : {
+          prestiges: 0,
+          clarityEarned: BigNumber.ZERO,
+          dopamineAllTime: BigNumber.ZERO,
+          swipes: 0,
+          likes: 0,
+          comments: 0,
+          gems: 0,
+          jackpots: 0,
+          seconds: 0,
+          bestDopPerSec: BigNumber.ZERO,
+          maxPhones: data.phoneCount ?? 1,
+          fastestPrestigeSec: 0,
+        };
     this.runStats = data.run
       ? { ...data.run }
       : { swipes: 0, likes: 0, comments: 0, gems: 0, jackpots: 0, seconds: 0 };
@@ -1428,6 +1573,14 @@ export class Game implements Tickable {
     this.checkAchievements();
     this.checkNarrative();
     this.runStats.seconds += dt;
+    this.updateRecords();
+  }
+
+  /** Aktualizuje doživotní rekordy (nejvyšší DOP/s, nejvíc telefonů). */
+  private updateRecords(): void {
+    const dps = this.estimatedDopaminePerSecond;
+    if (dps.gt(this.lifetime.bestDopPerSec)) this.lifetime.bestDopPerSec = dps;
+    if (this.phones.length > this.lifetime.maxPhones) this.lifetime.maxPhones = this.phones.length;
   }
 
   /** Odemkne platformy, jejichž práh kumulovaného Dopaminu byl právě překročen. */

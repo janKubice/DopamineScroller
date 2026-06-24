@@ -45,6 +45,7 @@ app.innerHTML = `
         🔊
         <input type="range" id="volume" min="0" max="1" step="0.05" />
       </label>
+      <button class="icon-btn" id="statsBtn" title="Statistics">📊</button>
       <button class="icon-btn" id="achBtn" title="Achievements">🏆</button>
       <button class="icon-btn" id="styleBtn" title="Style — toggle your cosmetics" hidden>🎨</button>
       <button class="icon-btn" id="zenBtn" title="Zen / Prestige">🧘</button>
@@ -1195,6 +1196,72 @@ function openStyle(): void {
   styleModal.hidden = false;
 }
 byId('styleBtn').addEventListener('click', openStyle);
+
+// ── Statistiky (📊): tento běh + doživotní souhrny + rekordy ──
+const statsModal = document.createElement('div');
+statsModal.className = 'modal';
+statsModal.hidden = true;
+document.body.appendChild(statsModal);
+
+function fmtTime(sec: number): string {
+  const s = Math.floor(sec % 60);
+  const m = Math.floor((sec / 60) % 60);
+  const h = Math.floor(sec / 3600);
+  return h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+function statRow(label: string, value: string): string {
+  return `<div class="stat-row"><span class="stat-row__k">${label}</span><span class="stat-row__v">${value}</span></div>`;
+}
+function openStats(): void {
+  const s = game.statsView();
+  const num = (n: number): string => Math.round(n).toLocaleString('en-US');
+  const runRows = [
+    statRow('⏱️ Time this run', fmtTime(s.run.seconds)),
+    statRow('📥 Dopamine earned', s.run.dopamine.format()),
+    statRow('⚡ Dopamine / sec', s.run.dopPerSec.format()),
+    statRow('⚙️ Production ×', s.run.production.format()),
+    statRow('👆 Swipes', num(s.run.swipes)),
+    statRow('👍 Likes', num(s.run.likes)),
+    statRow('💬 Comments', num(s.run.comments)),
+    statRow('💎 Hidden gems', num(s.run.gems)),
+    statRow('🎰 Jackpots', num(s.run.jackpots)),
+    statRow('📱 Phones', num(s.run.phones)),
+    statRow('🌐 Platform', escapeHtml(s.run.platform)),
+    statRow('🌀 Chaos', `${Math.round(s.run.chaos)}%`),
+    statRow('🎯 Attention', `${Math.round(s.run.attention)} / ${Math.round(s.run.maxAttention)}`),
+  ].join('');
+  const lifeRows = [
+    statRow('🔁 Prestiges', num(s.lifetime.prestiges)),
+    statRow('🧘 Clarity earned', s.lifetime.clarityEarned.format()),
+    statRow('💰 All-time Dopamine', s.lifetime.dopamineAllTime.format()),
+    statRow('👆 Total swipes', num(s.lifetime.swipes)),
+    statRow('👍 Total likes', num(s.lifetime.likes)),
+    statRow('💬 Total comments', num(s.lifetime.comments)),
+    statRow('💎 Total gems', num(s.lifetime.gems)),
+    statRow('🎰 Total jackpots', num(s.lifetime.jackpots)),
+    statRow('⏱️ Total time', fmtTime(s.lifetime.seconds)),
+    statRow('🏆 Achievements', `${s.achievements.unlocked} / ${s.achievements.total}`),
+  ].join('');
+  const recordRows = [
+    statRow('⚡ Best Dopamine/sec', s.records.bestDopPerSec.format()),
+    statRow('📱 Most phones', num(s.records.maxPhones)),
+    statRow('🏁 Fastest prestige', s.records.fastestPrestigeSec > 0 ? fmtTime(s.records.fastestPrestigeSec) : '—'),
+  ].join('');
+  statsModal.innerHTML = `
+    <div class="modal__backdrop" data-stclose></div>
+    <div class="modal__box stats-box">
+      <header class="modal__head"><span>📊 Statistics</span><button class="icon-btn" data-stclose>✕</button></header>
+      <div class="stats-cols">
+        <section class="stats-col"><h3>This run</h3>${runRows}</section>
+        <section class="stats-col"><h3>Lifetime</h3>${lifeRows}<h3 class="stats-records">Records</h3>${recordRows}</section>
+      </div>
+    </div>`;
+  for (const el of Array.from(statsModal.querySelectorAll('[data-stclose]'))) {
+    el.addEventListener('click', () => (statsModal.hidden = true));
+  }
+  statsModal.hidden = false;
+}
+byId('statsBtn').addEventListener('click', openStats);
 
 // ── Fáze 9 (C4): „Hlas Algoritmu" — systémový banner ──
 const algoBanner = document.createElement('div');

@@ -1456,3 +1456,39 @@ describe('Game — narativ „Hlas Algoritmu" (C4)', () => {
     expect(spoke).toBe(0);
   });
 });
+
+describe('Game — statistiky (Fáze 4)', () => {
+  it('statsView vrací běh, doživotní souhrny i rekordy', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(100) });
+    readyAndSwipe(game);
+    const s = game.statsView();
+    expect(s.run.swipes).toBeGreaterThanOrEqual(1);
+    expect(s.run.phones).toBe(1);
+    expect(s.lifetime.prestiges).toBe(0);
+    expect(s.achievements.total).toBeGreaterThan(0);
+    expect(s.records.maxPhones).toBeGreaterThanOrEqual(1);
+  });
+
+  it('doživotní akumulátory přežijí prestige (uzavřené běhy + aktuální)', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(1e12) });
+    readyAndSwipe(game);
+    const before = game.statsView().lifetime.swipes;
+    expect(before).toBeGreaterThanOrEqual(1);
+    game.prestige();
+    expect(game.statsView().lifetime.swipes).toBe(before); // runStats vynulován, doživotní drží
+    expect(game.statsView().lifetime.prestiges).toBe(1);
+    expect(game.statsView().records.fastestPrestigeSec).toBeGreaterThan(0);
+  });
+
+  it('rekord maxPhones a doživotní staty přežijí save/load', () => {
+    const game = new Game({ seed: 1, platforms: richPlatform(100) });
+    game.addPhone();
+    game.addPhone(); // 3 telefony
+    game.advance(0.1); // updateRecords
+    readyAndSwipe(game);
+    const restored = new Game({ seed: 2, platforms: richPlatform(100) });
+    restored.loadSave(game.serialize());
+    expect(restored.statsView().records.maxPhones).toBe(3);
+    expect(restored.statsView().lifetime.swipes).toBe(game.statsView().lifetime.swipes);
+  });
+});

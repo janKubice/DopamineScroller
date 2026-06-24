@@ -24,6 +24,16 @@ export interface SaveState {
     prestiges: number;
     clarityEarned: { m: number; e: number };
     dopamineAllTime: { m: number; e: number };
+    // přidáno ve Fázi 4 (statistiky) – volitelné kvůli zpětné kompatibilitě
+    swipes?: number;
+    likes?: number;
+    comments?: number;
+    gems?: number;
+    jackpots?: number;
+    seconds?: number;
+    bestDopPerSec?: { m: number; e: number };
+    maxPhones?: number;
+    fastestPrestigeSec?: number;
   };
   run?: { swipes: number; likes: number; comments: number; gems: number; jackpots: number; seconds: number };
   // přidáno ve Fázi 9 (volitelné kvůli zpětné kompatibilitě)

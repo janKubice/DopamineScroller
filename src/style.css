@@ -1571,6 +1571,48 @@ html.reduce-motion .confetti {
   animation-iteration-count: 1 !important;
 }
 
+/* ── Statistiky (📊) ── */
+.stats-box {
+  max-width: 620px;
+}
+.stats-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.stats-col h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+}
+.stats-col h3.stats-records {
+  margin-top: 16px;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.stat-row__k {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.stat-row__v {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (max-width: 560px) {
+  .stats-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Fáze 9 (C4): „Hlas Algoritmu" banner ── */
 .algo {
   position: fixed;
